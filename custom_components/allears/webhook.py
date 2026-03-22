@@ -79,9 +79,10 @@ async def handle_webhook(
 
         # Step 5 — App identity check
         if payload[ATTR_APP] != ALLEARS_APP_IDENTIFIER:
+            app_val = str(payload[ATTR_APP])
             LOGGER.warning(
                 "Rejected webhook from unknown app: %s",
-                str(payload[ATTR_APP])[:50],
+                app_val[:50],
             )
             return Response(
                 status=403,
@@ -158,7 +159,7 @@ async def handle_webhook(
                 coordinator = entry_coordinator
                 break
 
-        if coordinator:
+        if isinstance(coordinator, AllEarsDataUpdateCoordinator):
             await coordinator.async_handle_sound_event(payload)
 
         hass.bus.async_fire(EVENT_SOUND_DETECTED, payload)

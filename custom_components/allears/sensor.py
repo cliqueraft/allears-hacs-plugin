@@ -108,7 +108,7 @@ class AllEarsLastSoundSensor(
         raw_ts: int | None = self.coordinator.data.get(ATTR_TIMESTAMP)
         return {
             ATTR_FLOW_NAME: self.coordinator.data.get(ATTR_FLOW_NAME),
-            ATTR_CONFIDENCE: round(float(conf), 3) if conf is not None else None,
+            ATTR_CONFIDENCE: float(f"{float(conf):.3f}") if conf is not None else None,
             ATTR_TIMESTAMP: _epoch_ms_to_iso8601(raw_ts) if raw_ts else None,
             "last_updated": self.coordinator.data.get("last_updated"),
         }
