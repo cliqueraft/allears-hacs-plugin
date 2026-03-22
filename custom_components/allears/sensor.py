@@ -41,9 +41,7 @@ def _epoch_ms_to_iso8601(epoch_ms: int) -> str:
         ISO8601 formatted string in UTC, e.g.
         '2024-03-22T12:00:00+00:00'.
     """
-    return datetime.fromtimestamp(
-        epoch_ms / 1000, tz=timezone.utc
-    ).isoformat()
+    return datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc).isoformat()
 
 
 def _build_device_info(entry: ConfigEntry) -> DeviceInfo:

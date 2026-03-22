@@ -5,11 +5,11 @@
     "@kumarvishwajeettrivedi"
   ],
   "issue_tracker": "https://github.com/kumarvishwajeettrivedi/allears_ha/issues",
+  "documentation": "https://github.com/kumarvishwajeettrivedi/allears_ha",
   "config_flow": true,
   "dependencies": [
     "webhook"
   ],
-  "homeassistant": "2024.1.0",
   "iot_class": "local_push",
   "requirements": [],
   "version": "1.0.0"
