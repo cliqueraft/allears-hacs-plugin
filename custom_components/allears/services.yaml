@@ -1,0 +1,13 @@
+clear_history:
+  name: Clear Sound History
+  description: >
+    Resets all stored sound detection data across all AllEars devices.
+  fields: {}
+
+test_webhook:
+  name: Test Webhook
+  description: >
+    Fires a synthetic AllEars sound event. Use this to verify that
+    your HA automations are configured correctly before testing with
+    the real Android app.
+  fields: {}

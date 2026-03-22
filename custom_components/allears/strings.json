@@ -1,0 +1,55 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up AllEars",
+        "description": "This will register a webhook to receive data from the AllEars Android app.",
+        "data": {
+          "device_name": "Device Name"
+        }
+      },
+      "webhook_url": {
+        "title": "Copy your webhook URL",
+        "description": "Paste this URL into the AllEars Android app under\nSettings → Home Assistant Webhook URL:\n\n`{webhook_url}`\n\nTap Submit when done."
+      }
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update device settings",
+        "description": "Webhook ID (read-only): {webhook_id}",
+        "data": {
+          "device_name": "Device name"
+        }
+      }
+    }
+  },
+  "services": {
+    "simulate_webhook": {
+      "name": "Simulate Webhook",
+      "description": "Simulates a webhook payload from the AllEars app.",
+      "fields": {
+        "webhook_id": {
+          "name": "Webhook ID",
+          "description": "The webhook ID of the device to simulate."
+        },
+        "flow_name": {
+          "name": "Flow Name",
+          "description": "The name of the detected sound flow."
+        },
+        "sound_class": {
+          "name": "Sound Class",
+          "description": "The sound classification."
+        },
+        "confidence": {
+          "name": "Confidence",
+          "description": "Confidence strictly between 0 and 1."
+        }
+      }
+    }
+  }
+}

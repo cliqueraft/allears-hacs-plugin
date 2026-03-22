@@ -1,0 +1,16 @@
+{
+  "domain": "allears",
+  "name": "AllEars Sound Tracker",
+  "codeowners": [
+    "@kumarvishwajeettrivedi"
+  ],
+  "issue_tracker": "https://github.com/kumarvishwajeettrivedi/allears_ha/issues",
+  "config_flow": true,
+  "dependencies": [
+    "webhook"
+  ],
+  "homeassistant": "2024.1.0",
+  "iot_class": "local_push",
+  "requirements": [],
+  "version": "1.0.0"
+}
