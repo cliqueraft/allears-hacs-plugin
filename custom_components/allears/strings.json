@@ -29,27 +29,13 @@
     }
   },
   "services": {
-    "simulate_webhook": {
-      "name": "Simulate Webhook",
-      "description": "Simulates a webhook payload from the AllEars app.",
-      "fields": {
-        "webhook_id": {
-          "name": "Webhook ID",
-          "description": "The webhook ID of the device to simulate."
-        },
-        "flow_name": {
-          "name": "Flow Name",
-          "description": "The name of the detected sound flow."
-        },
-        "sound_class": {
-          "name": "Sound Class",
-          "description": "The sound classification."
-        },
-        "confidence": {
-          "name": "Confidence",
-          "description": "Confidence strictly between 0 and 1."
-        }
-      }
+    "clear_history": {
+      "name": "Clear Sound History",
+      "description": "Resets all stored sound detection data across all AllEars devices."
+    },
+    "test_webhook": {
+      "name": "Test Webhook",
+      "description": "Fires a synthetic AllEars sound event. Use this to verify that your HA automations are configured correctly before testing with the real Android app."
     }
   }
 }

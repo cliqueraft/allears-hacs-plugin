@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Final
 
 from homeassistant.components import webhook as ha_webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CONF_DEVICE_NAME, CONF_WEBHOOK_ID, DOMAIN, SERVICE_CLEAR_HISTORY, PLATFORMS
+from .const import (
+    CONF_DEVICE_NAME,
+    CONF_WEBHOOK_ID,
+    DOMAIN,
+    PLATFORMS,
+    SERVICE_CLEAR_HISTORY,
+)
 from .coordinator import AllEarsDataUpdateCoordinator
 from .services import async_register_services
 from .webhook import handle_webhook

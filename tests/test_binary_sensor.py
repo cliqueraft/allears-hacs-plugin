@@ -83,7 +83,7 @@ async def test_sound_active_resets_to_false_after_30s(
 
 @pytest.mark.asyncio
 async def test_sound_active_debounces_rapid_events(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
+    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any], freezer: FrozenDateTimeFactory
 ) -> None:
     """Test the sound active binary sensor debounces rapid events."""
     coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
@@ -92,35 +92,32 @@ async def test_sound_active_debounces_rapid_events(
         "binary_sensor", DOMAIN, f"{ENTRY_ID_FOR_TESTS}_{BINARY_SENSOR_ACTIVE}"
     )
 
-    now = dt_util.utcnow()
+    # Fire first event at t=0
     await coordinator.async_handle_sound_event(valid_payload)
     await hass.async_block_till_done()
-    state = hass.states.get(entity_id)
-    assert state.state == STATE_ON
+    assert hass.states.get(entity_id).state == STATE_ON
 
-    # Fire second event at t=15s (before first timer expires at t=30s) — resets window
-    now += dt_util.dt.timedelta(seconds=15)
-    async_fire_time_changed(hass, now)
+    # Move forward 15s (before 30s timer expires)
+    freezer.tick(dt_util.dt.timedelta(seconds=15))
+    async_fire_time_changed(hass)
     await hass.async_block_till_done()
 
+    # Fire second event at t=15, should create new 30s timer ending at t=45
     await coordinator.async_handle_sound_event(valid_payload)
     await hass.async_block_till_done()
-    state = hass.states.get(entity_id)
-    assert state.state == STATE_ON
+    assert hass.states.get(entity_id).state == STATE_ON
 
-    # At t=40s — second timer not yet expired (set to t=45s)
-    now += dt_util.dt.timedelta(seconds=25)
-    async_fire_time_changed(hass, now)
+    # Move forward 25s to t=40. Second timer hasn't expired yet.
+    freezer.tick(dt_util.dt.timedelta(seconds=25))
+    async_fire_time_changed(hass)
     await hass.async_block_till_done()
-    state = hass.states.get(entity_id)
-    assert state.state == STATE_ON
+    assert hass.states.get(entity_id).state == STATE_ON
 
-    # At t=50s — past second timer's expiry at t=45s — should be off now
-    now += dt_util.dt.timedelta(seconds=10)
-    async_fire_time_changed(hass, now)
+    # Move forward 10s to t=50. Second timer expires at t=45, should be off now.
+    freezer.tick(dt_util.dt.timedelta(seconds=10))
+    async_fire_time_changed(hass)
     await hass.async_block_till_done()
-    state = hass.states.get(entity_id)
-    assert state.state == STATE_OFF
+    assert hass.states.get(entity_id).state == STATE_OFF
 
 
 @pytest.mark.asyncio

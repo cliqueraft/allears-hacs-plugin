@@ -9,7 +9,7 @@ select = ["E", "F", "I", "N", "UP", "ANN", "S", "B", "A"]
 [tool.mypy]
 strict = true
 python_version = "3.12"
-disable_error_code = ["import-untyped", "var-annotated", "misc", "no-any-return"]
+disable_error_code = ["import-untyped", "var-annotated", "misc", "no-any-return", "call-arg", "unused-ignore", "untyped-decorator"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

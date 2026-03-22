@@ -35,11 +35,11 @@ jobs:
       - name: Install linting tools
         run: pip install ruff mypy
       - name: Ruff lint
-        run: ruff check allears_ha/custom_components/allears/
+        run: ruff check custom_components/allears/
       - name: Ruff format check
-        run: ruff format --check allears_ha/custom_components/allears/
+        run: ruff format --check custom_components/allears/
       - name: Mypy strict
         run: |
-          mypy allears_ha/custom_components/allears/ \
+          mypy custom_components/allears/ \
             --strict \
             --ignore-missing-imports

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -109,7 +109,7 @@ class AllEarsLastSoundSensor(
         return {
             ATTR_FLOW_NAME: self.coordinator.data.get(ATTR_FLOW_NAME),
             ATTR_CONFIDENCE: round(float(conf), 3) if conf is not None else None,
-            ATTR_TIMESTAMP: _epoch_ms_to_iso8601(raw_ts) if raw_ts is not None else None,
+            ATTR_TIMESTAMP: _epoch_ms_to_iso8601(raw_ts) if raw_ts else None,
             "last_updated": self.coordinator.data.get("last_updated"),
         }
 
@@ -152,7 +152,7 @@ class AllEarsLastFlowSensor(
         raw_ts: int | None = self.coordinator.data.get(ATTR_TIMESTAMP)
         return {
             ATTR_SOUND_CLASS: self.coordinator.data.get(ATTR_SOUND_CLASS),
-            ATTR_TIMESTAMP: _epoch_ms_to_iso8601(raw_ts) if raw_ts is not None else None,
+            ATTR_TIMESTAMP: _epoch_ms_to_iso8601(raw_ts) if raw_ts else None,
         }
 
     @property

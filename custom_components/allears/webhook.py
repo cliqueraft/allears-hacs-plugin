@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aiohttp.web import Request, Response
-
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -63,14 +62,14 @@ async def handle_webhook(
             )
 
         # Step 4 — Required field validation
-        REQUIRED_FIELDS = {
+        required_fields = {
             ATTR_APP,
             ATTR_FLOW_NAME,
             ATTR_SOUND_CLASS,
             ATTR_CONFIDENCE,
             ATTR_TIMESTAMP,
         }
-        missing = REQUIRED_FIELDS - payload.keys()
+        missing = required_fields - payload.keys()
         if missing:
             return Response(
                 status=400,
