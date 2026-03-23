@@ -13,8 +13,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12"]
-        ha-version: ["2024.1.0", "2024.6.0"]
+        include:
+          - python-version: "3.12"
+            ha-version: "2024.1.0"
+            phcc-version: "0.13.109"
+          - python-version: "3.12"
+            ha-version: "2024.6.0"
+            phcc-version: "0.13.205"
 
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +34,7 @@ jobs:
           pip install \
             pytest \
             pytest-asyncio \
-            pytest-homeassistant-custom-component==${{ matrix.ha-version }} \
+            pytest-homeassistant-custom-component==${{ matrix.phcc-version }} \
             pytest-cov \
             freezegun
 
@@ -48,4 +53,5 @@ jobs:
         with:
           name: coverage-py${{ matrix.python-version }}-ha${{ matrix.ha-version }}
           path: coverage.xml
+          if-no-files-found: ignore
           retention-days: 14
