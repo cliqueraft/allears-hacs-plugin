@@ -1,10 +1,10 @@
 # AllEars Sound Tracker
 Subtitle: Home Assistant integration for the AllEars Android app
 
-[![HACS](https://img.shields.io/badge/HACS-Default-blue)](https://github.com/hacs/integration)
-[![Hassfest](https://github.com/kumarvishwajeettrivedi/allears_ha/actions/workflows/validate.yml/badge.svg)](https://github.com/kumarvishwajeettrivedi/allears_ha/actions/workflows/validate.yml)
-[![Tests](https://github.com/kumarvishwajeettrivedi/allears_ha/actions/workflows/tests.yml/badge.svg)](https://github.com/kumarvishwajeettrivedi/allears_ha/actions/workflows/tests.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/cliqueraft/allears-hacs-plugin)
+[![Validate](https://github.com/cliqueraft/allears-hacs-plugin/actions/workflows/validate.yml/badge.svg)](https://github.com/cliqueraft/allears-hacs-plugin/actions/workflows/validate.yml)
+[![Tests](https://github.com/cliqueraft/allears-hacs-plugin/actions/workflows/tests.yml/badge.svg)](https://github.com/cliqueraft/allears-hacs-plugin/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/cliqueraft/allears-hacs-plugin/blob/main/LICENSE)
 
 ## Overview
 This integration receives classified sound events directly from the AllEars Android app via a local webhook. It creates sensors to track the latest detected sounds and flows within Home Assistant. You can use these entities to build powerful automations or trigger immediate alerts.
@@ -21,7 +21,7 @@ This integration receives classified sound events directly from the AllEars Andr
 1. Open HACS in Home Assistant
 2. Go to Integrations
 3. Click the three-dot menu → Custom repositories
-4. Add: `https://github.com/kumarvishwajeettrivedi/allears_ha` — category: Integration
+4. Add: `https://github.com/cliqueraft/allears-hacs-plugin` — category: Integration
 5. Search for "AllEars Sound Tracker" → Download
 6. Restart Home Assistant
 
@@ -131,11 +131,11 @@ PR process:
 
 Local dev setup:
 ```bash
-git clone https://github.com/kumarvishwajeettrivedi/allears_ha.git
-cd allears_ha
+git clone https://github.com/cliqueraft/allears-hacs-plugin
+cd allears-hacs-plugin
 pip install ruff mypy pytest pytest-asyncio \
   pytest-homeassistant-custom-component pytest-cov freezegun
-pytest allears_ha/tests/ --cov=allears_ha/custom_components/allears
+pytest tests/ --cov=custom_components/allears
 ```
 
 ## License

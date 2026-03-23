@@ -2,10 +2,10 @@
   "domain": "allears",
   "name": "AllEars Sound Tracker",
   "codeowners": [
-    "@kumarvishwajeettrivedi"
+    "@cliqueraft"
   ],
-  "issue_tracker": "https://github.com/kumarvishwajeettrivedi/allears_ha/issues",
-  "documentation": "https://github.com/kumarvishwajeettrivedi/allears_ha",
+  "issue_tracker": "https://github.com/cliqueraft/allears-hacs-plugin/issues",
+  "documentation": "https://github.com/cliqueraft/allears-hacs-plugin",
   "config_flow": true,
   "dependencies": [
     "webhook"

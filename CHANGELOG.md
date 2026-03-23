@@ -32,3 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Timestamp drift validation — rejects events > 60 seconds in future
 - Webhook_id immutable after creation — cannot be changed via
   OptionsFlow
+
+[Unreleased]: https://github.com/cliqueraft/allears-hacs-plugin/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/cliqueraft/allears-hacs-plugin/releases/tag/v1.0.0
