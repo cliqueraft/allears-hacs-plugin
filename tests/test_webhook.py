@@ -1,4 +1,4 @@
-"""Tests for the AllEars webhook."""
+"""Tests for the AllEars webhook (Graceful compatibility version)."""
 
 from __future__ import annotations
 
@@ -32,15 +32,41 @@ async def test_webhook_valid_payload_returns_200(
     setup_integration: MockConfigEntry,
     valid_payload: dict[str, Any],
 ) -> None:
-    """Test the webhook returns HTTP 200 OK for a valid payload."""
+    """Test the webhook returns HTTP 200 OK for a valid query."""
     client = await hass_client_no_auth()
-    resp = await client.post(
+    resp = await client.get(
         f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-        json=valid_payload,
+        params=valid_payload,
     )
     assert resp.status == HTTPStatus.OK
     body = await resp.json()
     assert body == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_webhook_bare_get_returns_200_and_defaults(
+    hass: HomeAssistant,
+    hass_client_no_auth: Any,
+    setup_integration: MockConfigEntry,
+) -> None:
+    """Test the webhook handles a bare GET request (compatibility with current Android app)."""
+    events = []
+    hass.bus.async_listen(EVENT_SOUND_DETECTED, events.append)
+
+    client = await hass_client_no_auth()
+    resp = await client.get(f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}")
+    assert resp.status == HTTPStatus.OK
+
+    await hass.async_block_till_done()
+
+    # Verify defaults are applied and event is fired
+    assert len(events) == 1
+    data = events[0].data
+    assert data[ATTR_APP] == "AllEars"
+    assert data[ATTR_FLOW_NAME] == "Manual Trigger"
+    assert data[ATTR_SOUND_CLASS] == "Unknown Sound"
+    assert data[ATTR_CONFIDENCE] == 1.0
+    assert isinstance(data[ATTR_TIMESTAMP], int)
 
 
 @pytest.mark.asyncio
@@ -50,14 +76,14 @@ async def test_webhook_fires_ha_event_on_valid_payload(
     setup_integration: MockConfigEntry,
     valid_payload: dict[str, Any],
 ) -> None:
-    """Test the webhook fires an event to the HA bus on valid payload."""
+    """Test the webhook fires an event to the HA bus on valid query."""
     events = []
     hass.bus.async_listen(EVENT_SOUND_DETECTED, events.append)
 
     client = await hass_client_no_auth()
-    await client.post(
+    await client.get(
         f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-        json=valid_payload,
+        params=valid_payload,
     )
     await hass.async_block_till_done()
 
@@ -72,11 +98,11 @@ async def test_webhook_updates_coordinator_on_valid_payload(
     setup_integration: MockConfigEntry,
     valid_payload: dict[str, Any],
 ) -> None:
-    """Test the webhook passes valid payload data to the coordinator."""
+    """Test the webhook passes valid query data to the coordinator."""
     client = await hass_client_no_auth()
-    await client.post(
+    await client.get(
         f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-        json=valid_payload,
+        params=valid_payload,
     )
     await hass.async_block_till_done()
 
@@ -86,87 +112,23 @@ async def test_webhook_updates_coordinator_on_valid_payload(
 
 
 @pytest.mark.asyncio
-async def test_webhook_missing_required_field_returns_400(
-    hass: HomeAssistant,
-    hass_client_no_auth: Any,
-    setup_integration: MockConfigEntry,
-    valid_payload: dict[str, Any],
-) -> None:
-    """Test the webhook returns 400 Bad Request if standard fields are missing."""
-    client = await hass_client_no_auth()
-    for field in [
-        ATTR_APP,
-        ATTR_FLOW_NAME,
-        ATTR_SOUND_CLASS,
-        ATTR_CONFIDENCE,
-        ATTR_TIMESTAMP,
-    ]:
-        payload = dict(valid_payload)
-        payload.pop(field)
-        resp = await client.post(
-            f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-            json=payload,
-        )
-        assert resp.status == HTTPStatus.BAD_REQUEST
-        body = await resp.json()
-        assert "missing_fields" in body["error"]
-
-
-@pytest.mark.asyncio
 async def test_webhook_wrong_app_name_returns_403(
     hass: HomeAssistant,
     hass_client_no_auth: Any,
     setup_integration: MockConfigEntry,
     valid_payload: dict[str, Any],
 ) -> None:
-    """Test the webhook returns 403 Forbidden if the app identifier does not match."""
+    """Test the webhook returns 403 Forbidden if the wrong app identifier is provided."""
     client = await hass_client_no_auth()
-    payload = dict(valid_payload)
-    payload[ATTR_APP] = "NotAllEars"
-    resp = await client.post(
+    params = dict(valid_payload)
+    params[ATTR_APP] = "NotAllEars"
+    resp = await client.get(
         f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-        json=payload,
+        params=params,
     )
     assert resp.status == HTTPStatus.FORBIDDEN
     body = await resp.json()
     assert body == {"error": "forbidden"}
-
-
-@pytest.mark.asyncio
-async def test_webhook_invalid_json_returns_400(
-    hass: HomeAssistant,
-    hass_client_no_auth: Any,
-    setup_integration: MockConfigEntry,
-) -> None:
-    """Test the webhook returns 400 Bad Request on completely invalid JSON bytes."""
-    client = await hass_client_no_auth()
-    resp = await client.post(
-        f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-        data=b"this is not json",
-        headers={"Content-Type": "application/json"},
-    )
-    assert resp.status == HTTPStatus.BAD_REQUEST
-    body = await resp.json()
-    assert body == {"error": "invalid_json"}
-
-
-@pytest.mark.asyncio
-async def test_webhook_wrong_content_type_returns_415(
-    hass: HomeAssistant,
-    hass_client_no_auth: Any,
-    setup_integration: MockConfigEntry,
-    valid_payload: dict[str, Any],
-) -> None:
-    """Test the webhook returns 415 Unsupported Media Type if content type is wrong."""
-    client = await hass_client_no_auth()
-    resp = await client.post(
-        f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-        data=json.dumps(valid_payload),
-        headers={"Content-Type": "text/plain"},
-    )
-    assert resp.status == HTTPStatus.UNSUPPORTED_MEDIA_TYPE
-    body = await resp.json()
-    assert body == {"error": "unsupported_media_type"}
 
 
 @pytest.mark.asyncio
@@ -175,17 +137,17 @@ async def test_webhook_payload_too_large_returns_413(
     hass_client_no_auth: Any,
     setup_integration: MockConfigEntry,
 ) -> None:
-    """Test the webhook returns 413 Payload Too Large on overly large requests."""
+    """Test the webhook returns 413 Request Entity Too Large on overly large query strings."""
     client = await hass_client_no_auth()
-    long_string = "A" * 65537
-    resp = await client.post(
-        f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-        data=long_string.encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-    )
+    # Mocking the size limit to a small value to avoid hitting URL length limits in test environment
+    with patch("custom_components.allears.webhook.WEBHOOK_MAX_SIZE_BYTES", 10):
+        resp = await client.get(
+            f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
+            params={"large": "A" * 11},
+        )
     assert resp.status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     body = await resp.json()
-    assert body == {"error": "payload_too_large"}
+    assert body == {"error": "query_string_too_large"}
 
 
 @pytest.mark.asyncio
@@ -198,11 +160,11 @@ async def test_webhook_confidence_out_of_range_rejected(
     """Test the webhook returns 422 Unprocessable Entity if confidence is invalid."""
     client = await hass_client_no_auth()
     for bad_conf in [1.01, -0.01, "high"]:
-        payload = dict(valid_payload)
-        payload[ATTR_CONFIDENCE] = bad_conf
-        resp = await client.post(
+        params = dict(valid_payload)
+        params[ATTR_CONFIDENCE] = bad_conf
+        resp = await client.get(
             f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-            json=payload,
+            params=params,
         )
         assert resp.status == HTTPStatus.UNPROCESSABLE_ENTITY
         body = await resp.json()
@@ -222,12 +184,12 @@ async def test_webhook_future_timestamp_rejected(
 
     client = await hass_client_no_auth()
     frozen_now = int(time.time() * 1000)
-    payload = dict(valid_payload)
-    payload[ATTR_TIMESTAMP] = frozen_now + 61000
+    params = dict(valid_payload)
+    params[ATTR_TIMESTAMP] = frozen_now + 61000
 
-    resp = await client.post(
+    resp = await client.get(
         f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-        json=payload,
+        params=params,
     )
     assert resp.status == HTTPStatus.UNPROCESSABLE_ENTITY
     body = await resp.json()
@@ -247,9 +209,9 @@ async def test_webhook_does_not_crash_on_any_exception(
         "custom_components.allears.coordinator.AllEarsDataUpdateCoordinator.async_handle_sound_event",
         side_effect=RuntimeError("Test exception"),
     ):
-        resp = await client.post(
+        resp = await client.get(
             f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
-            json=valid_payload,
+            params=valid_payload,
         )
     assert resp.status == HTTPStatus.INTERNAL_SERVER_ERROR
     body = await resp.json()

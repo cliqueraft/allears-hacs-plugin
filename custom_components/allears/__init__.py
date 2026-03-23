@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 
+import homeassistant.helpers.config_validation as cv
 from homeassistant.components import webhook as ha_webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
-import homeassistant.helpers.config_validation as cv
 
 from .const import (
     CONF_DEVICE_NAME,
@@ -48,6 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.title,
         entry.data[CONF_WEBHOOK_ID],
         handle_webhook,
+        allowed_methods=["GET"],
     )
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
