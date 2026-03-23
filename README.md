@@ -11,7 +11,7 @@ This integration receives classified sound events directly from the AllEars Andr
 
 ## Prerequisites
 1. Home Assistant `2024.1.0` or later
-2. AllEars app installed on Android
+2. AllEars app installed on Android (https://play.google.com/store/apps/details?id=com.cliqueraft.allears&hl=en_IN)
 3. AllEars app version `X.X` or later (supports POST webhooks) — note: older versions fired GET requests and are incompatible
 4. HA reachable from the Android device (local network or Nabu Casa)
 

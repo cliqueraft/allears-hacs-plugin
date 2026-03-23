@@ -41,6 +41,7 @@ async def test_webhook_valid_payload_returns_200(
     assert resp.status == HTTPStatus.OK
     body = await resp.json()
     assert body == {"status": "ok"}
+    await client.close()
     await hass.async_block_till_done()
 
 
@@ -57,8 +58,8 @@ async def test_webhook_bare_get_returns_200_and_defaults(
     client = await hass_client_no_auth()
     resp = await client.get(f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}")
     assert resp.status == HTTPStatus.OK
-
     await hass.async_block_till_done()
+    await client.close()
 
     # Verify defaults are applied and event is fired
     assert len(events) == 1
@@ -87,6 +88,7 @@ async def test_webhook_fires_ha_event_on_valid_payload(
         params=valid_payload,
     )
     await hass.async_block_till_done()
+    await client.close()
 
     assert len(events) == 1
     assert events[0].data[ATTR_SOUND_CLASS] == "Glass Breaking"
@@ -110,6 +112,7 @@ async def test_webhook_updates_coordinator_on_valid_payload(
     coordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
     assert coordinator.data[ATTR_SOUND_CLASS] == "Glass Breaking"
     assert coordinator.data[ATTR_CONFIDENCE] == 0.87
+    await client.close()
 
 
 @pytest.mark.asyncio
@@ -130,6 +133,7 @@ async def test_webhook_wrong_app_name_returns_403(
     assert resp.status == HTTPStatus.FORBIDDEN
     body = await resp.json()
     assert body == {"error": "forbidden"}
+    await client.close()
     await hass.async_block_till_done()
 
 
@@ -150,6 +154,7 @@ async def test_webhook_payload_too_large_returns_413(
     assert resp.status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     body = await resp.json()
     assert body == {"error": "query_string_too_large"}
+    await client.close()
     await hass.async_block_till_done()
 
 
@@ -172,7 +177,9 @@ async def test_webhook_confidence_out_of_range_rejected(
         assert resp.status == HTTPStatus.UNPROCESSABLE_ENTITY
         body = await resp.json()
         assert body.get("error") == "validation_error"
-        await hass.async_block_till_done()
+
+    await client.close()
+    await hass.async_block_till_done()
 
 
 @pytest.mark.asyncio
@@ -198,6 +205,7 @@ async def test_webhook_future_timestamp_rejected(
     assert resp.status == HTTPStatus.UNPROCESSABLE_ENTITY
     body = await resp.json()
     assert body["error"] == "timestamp_drift"
+    await client.close()
     await hass.async_block_till_done()
 
 
@@ -222,4 +230,5 @@ async def test_webhook_does_not_crash_on_any_exception(
     body = await resp.json()
     assert body == {"error": "internal_error"}
     assert hass.is_running is True
+    await client.close()
     await hass.async_block_till_done()
