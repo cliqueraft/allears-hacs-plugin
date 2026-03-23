@@ -41,6 +41,7 @@ async def test_webhook_valid_payload_returns_200(
     assert resp.status == HTTPStatus.OK
     body = await resp.json()
     assert body == {"status": "ok"}
+    await hass.async_block_till_done()
 
 
 @pytest.mark.asyncio
@@ -129,6 +130,7 @@ async def test_webhook_wrong_app_name_returns_403(
     assert resp.status == HTTPStatus.FORBIDDEN
     body = await resp.json()
     assert body == {"error": "forbidden"}
+    await hass.async_block_till_done()
 
 
 @pytest.mark.asyncio
@@ -139,7 +141,7 @@ async def test_webhook_payload_too_large_returns_413(
 ) -> None:
     """Test the webhook returns 413 Request Entity Too Large on overly large query strings."""
     client = await hass_client_no_auth()
-    # Mocking the size limit to a small value to avoid hitting URL length limits in test environment
+    # Mocking the size limit to a small value
     with patch("custom_components.allears.webhook.WEBHOOK_MAX_SIZE_BYTES", 10):
         resp = await client.get(
             f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
@@ -148,6 +150,7 @@ async def test_webhook_payload_too_large_returns_413(
     assert resp.status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     body = await resp.json()
     assert body == {"error": "query_string_too_large"}
+    await hass.async_block_till_done()
 
 
 @pytest.mark.asyncio
@@ -169,6 +172,7 @@ async def test_webhook_confidence_out_of_range_rejected(
         assert resp.status == HTTPStatus.UNPROCESSABLE_ENTITY
         body = await resp.json()
         assert body.get("error") == "validation_error"
+        await hass.async_block_till_done()
 
 
 @pytest.mark.asyncio
@@ -194,6 +198,7 @@ async def test_webhook_future_timestamp_rejected(
     assert resp.status == HTTPStatus.UNPROCESSABLE_ENTITY
     body = await resp.json()
     assert body["error"] == "timestamp_drift"
+    await hass.async_block_till_done()
 
 
 @pytest.mark.asyncio
@@ -217,3 +222,4 @@ async def test_webhook_does_not_crash_on_any_exception(
     body = await resp.json()
     assert body == {"error": "internal_error"}
     assert hass.is_running is True
+    await hass.async_block_till_done()

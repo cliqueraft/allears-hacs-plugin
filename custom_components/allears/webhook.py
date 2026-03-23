@@ -61,7 +61,10 @@ async def handle_webhook(
 
         # Step 3 — App identity check (Warn but allow if missing)
         if query.get(ATTR_APP) is None:
-            LOGGER.debug("Webhook received without app identifier, defaulting to AllEars")
+            LOGGER.debug(
+                "Webhook received without app identifier, defaulting to %s",
+                ALLEARS_APP_IDENTIFIER,
+            )
         elif payload[ATTR_APP] != ALLEARS_APP_IDENTIFIER:
             app_val = str(payload[ATTR_APP])
             LOGGER.warning(
@@ -146,8 +149,8 @@ async def handle_webhook(
             content_type="application/json",
         )
 
-    except Exception as err:
-        LOGGER.error("Unexpected webhook error: %s", err)
+    except Exception:
+        LOGGER.exception("Unexpected webhook error")
         return Response(
             status=500,
             body=json.dumps({"error": "internal_error"}),
