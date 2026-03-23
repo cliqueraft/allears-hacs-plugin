@@ -12,8 +12,7 @@ This integration receives classified sound events directly from the AllEars Andr
 ## Prerequisites
 1. Home Assistant `2024.1.0` or later
 2. AllEars app installed on Android (https://play.google.com/store/apps/details?id=com.cliqueraft.allears&hl=en_IN)
-3. AllEars app version `X.X` or later (supports POST webhooks) — note: older versions fired GET requests and are incompatible
-4. HA reachable from the Android device (local network or Nabu Casa)
+3. HA reachable from the Android device (local network or Nabu Casa)
 
 ## Installation
 
@@ -49,6 +48,16 @@ Paste the URL → Save
 **Step 5: Verify**
 In HA: Developer Tools → Services → `allears.test_webhook` → Call
 The `sensor.last_detected_sound` entity should show "Test Sound"
+
+## Webhook Specification
+The integration robustly relies on **GET** requests with **URL Query Parameters** to guarantee compliance with all variants of the Android client.
+
+Example incoming HTTP request:
+```
+GET /api/webhook/<id>?app=AllEars&flow_name=Security&sound_class=Glass+Breaking&confidence=0.87&timestamp=1711132800000
+```
+- Missing parameters fallback to built-in stable defaults.
+- Enforced verification on timestamp drift and confidence value (`0.0`–`1.0`).
 
 ## Entities created
 | Entity ID | Type | Description | Resets |
@@ -110,7 +119,6 @@ automation:
 ## Troubleshooting
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| No events arriving in HA | AllEars app version older than X.X fires GET not POST | Update AllEars app. Check version in app Settings → About. The POST webhook requires AllEars vX.X or later. |
 | Webhook URL unreachable from phone | HA not accessible from Android device's network | Ensure phone and HA are on the same LAN, or enable remote access via Nabu Casa (Settings → Home Assistant Cloud). |
 | `binary_sensor.sound_active` resets too quickly | 30-second window is by design | This is intentional. Create automations that trigger on the state change to "on" rather than relying on it staying on. |
 | `sensor.last_detected_sound` shows unexpected sounds | YAMNet confidence threshold in AllEars is set below 0.3 | Open AllEars → Settings → Detection Sensitivity and raise the confidence threshold. |
@@ -121,13 +129,8 @@ Requirements for all PRs:
 - `ruff check` and `ruff format` must pass with zero warnings
 - `mypy --strict` must pass with zero errors
 - All new behaviour must have tests — coverage must stay above 90%
-- Branch protection: validate and tests workflows must pass (Ensure this is configured in GitHub repository settings)
-
-PR process:
-1. Fork the repo
-2. Create a feature branch off `main`
-3. Make changes, ensure all checks pass locally
-4. Open a PR — describe what changed and why
+- Branch protection: validate and tests workflows must pass
+- Explicit Pytest CI thread-safety bypasses exist in `conftest.py`.
 
 Local dev setup:
 ```bash
