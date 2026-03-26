@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AllEars Card — Local Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&family=Roboto+Mono&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      /* ── Dashboard Light Theme CSS variables ── */
+      --primary-background-color: #f4f6f9;
+      --card-background-color: #ffffff;
+      --secondary-background-color: rgba(0, 0, 0, 0.03);
+      --primary-text-color: #1c1e27;
+      --secondary-text-color: #68707c;
+      --disabled-text-color: #aeb4be;
+      --divider-color: rgba(0, 0, 0, 0.06);
+      --primary-color: #4b6afa;
+      --info-color: #4b6afa;
+      --warning-color: #ffb822;
+      --success-color: #1dc9b7;
+      --error-color: #fd397a;
+      --ha-card-border-radius: 16px;
+      --ha-card-border-width: 1px;
+      --ha-card-border-color: rgba(0, 0, 0, 0.05);
+      --ha-card-box-shadow: 0 8px 24px rgba(17, 24, 39, 0.04);
+      --text-primary-color: #1c1e27;
+    }
+
+    body {
+      margin: 0;
+      background: var(--primary-background-color);
+      font-family: 'Roboto', sans-serif;
+      display: flex;
+      min-height: 100vh;
+      color: var(--primary-text-color);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 250px;
+      background: var(--card-background-color);
+      border-right: 1px solid var(--divider-color);
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      box-shadow: 2px 0 12px rgba(0,0,0,0.02);
+      z-index: 10;
+    }
+
+    .sidebar-header {
+      padding: 24px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--divider-color);
+    }
+
+    .sidebar-header span {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    .nav-group-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--secondary-text-color);
+      padding: 24px 20px 8px;
+    }
+
+    .toolbar-controls {
+      display: flex;
+      flex-direction: column;
+      padding: 0 12px;
+      gap: 4px;
+    }
+
+    .ctrl-btn {
+      appearance: none;
+      background: transparent;
+      border: none;
+      color: var(--secondary-text-color);
+      font: 500 14px 'Roboto', sans-serif;
+      text-align: left;
+      padding: 12px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .ctrl-btn ha-icon {
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+
+    .ctrl-btn:hover {
+      background: var(--secondary-background-color);
+      color: var(--primary-text-color);
+    }
+
+    .ctrl-btn:hover ha-icon {
+      opacity: 1;
+    }
+
+    .ctrl-btn.active {
+      background: rgba(75, 106, 250, 0.08);
+      color: var(--primary-color);
+      font-weight: 500;
+    }
+    
+    .ctrl-btn.active ha-icon {
+      opacity: 1;
+      color: var(--primary-color);
+    }
+
+    /* ── Main Content ── */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 0;
+    }
+
+    .top-header {
+      height: 72px;
+      padding: 0 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+    }
+
+    .header-title {
+      font-size: 20px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .header-title ha-icon {
+      color: var(--secondary-text-color);
+    }
+
+    .state-tag {
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--primary-background-color);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--divider-color);
+      color: var(--secondary-text-color);
+    }
+
+    .dashboard-area {
+      padding: 32px 40px;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    all-ears-card {
+      display: block;
+      width: 100%;
+    }
+
+    /* Polyfill ha-icon as a span for local preview */
+    ha-icon::before {
+      font-size: 20px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <ha-icon icon="mdi:camera-iris" style="color: var(--primary-color); --mdc-icon-size: 24px;"></ha-icon>
+      <span>AllEars Preview</span>
+    </div>
+    <div class="nav-group-title">State Scenarios</div>
+    <div class="toolbar-controls">
+      <button class="ctrl-btn active" id="btn-state-clear" onclick="setState('clear')">
+        <ha-icon icon="mdi:check-circle-outline"></ha-icon> Clear
+      </button>
+      <button class="ctrl-btn" id="btn-state-active" onclick="setState('active')">
+        <ha-icon icon="mdi:ear-hearing"></ha-icon> Active
+      </button>
+      <button class="ctrl-btn" id="btn-state-unavail" onclick="setState('unavailable')">
+        <ha-icon icon="mdi:alert-circle-outline"></ha-icon> Unavailable
+      </button>
+      <button class="ctrl-btn" id="btn-state-empty" onclick="setState('empty')">
+        <ha-icon icon="mdi:database-remove-outline"></ha-icon> Empty
+      </button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="top-header">
+      <div class="header-title">
+        <ha-icon icon="mdi:home-outline"></ha-icon> Home Dashboard
+      </div>
+      <div class="state-tag" id="state-tag">State: Clear</div>
+    </header>
+    <div class="dashboard-area">
+      <all-ears-card id="card"></all-ears-card>
+    </div>
+  </main>
+
+  <!-- Polyfill ha-icon using MDI CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" />
+  <script>
+    // ── Minimal ha-icon polyfill ──────────────────────────────────────────────
+    class HaIcon extends HTMLElement {
+      static get observedAttributes() { return ['icon']; }
+
+      connectedCallback() { this._render(); }
+      attributeChangedCallback() { this._render(); }
+
+      _render() {
+        const icon = this.getAttribute('icon') || '';
+        // Convert "mdi:microphone" → "mdi-microphone"
+        const cls = icon.replace(':', '-');
+        this.innerHTML = `<span class="mdi ${cls}" style="font-size:20px; line-height:1; display:inline-flex; align-items:center;"></span>`;
+      }
+    }
+    customElements.define('ha-icon', HaIcon);
+
+    // ── Minimal ha-card polyfill ──────────────────────────────────────────────
+    class HaCard extends HTMLElement {
+      connectedCallback() {
+        this.style.display = 'block';
+      }
+    }
+    customElements.define('ha-card', HaCard);
+  </script>
+
+  <!-- Load our card -->
+  <script type="module" src="./all-ears-card.js"></script>
+
+  <script>
+    // ── Mock hass states ──────────────────────────────────────────────────────
+    const MOCK_STATES = {
+      clear: {
+        'binary_sensor.allears_sound_active': { state: 'off', attributes: {} },
+        'sensor.allears_last_detected_sound': {
+          state: 'dog_bark',
+          attributes: {
+            confidence: 0.87,
+            flow_name: 'Dog Alert Flow',
+            timestamp: new Date(Date.now() - 90000).toISOString(),
+          },
+        },
+        'sensor.allears_last_triggered_flow': {
+          state: 'Dog Alert Flow',
+          attributes: {
+            sound_class: 'dog_bark',
+            timestamp: new Date(Date.now() - 90000).toISOString(),
+          },
+        },
+      },
+      active: {
+        'binary_sensor.allears_sound_active': { state: 'on', attributes: {} },
+        'sensor.allears_last_detected_sound': {
+          state: 'glass_breaking',
+          attributes: {
+            confidence: 0.94,
+            flow_name: 'Security Flow',
+            timestamp: new Date().toISOString(),
+          },
+        },
+        'sensor.allears_last_triggered_flow': {
+          state: 'Security Flow',
+          attributes: {
+            sound_class: 'glass_breaking',
+            timestamp: new Date().toISOString(),
+          },
+        },
+      },
+      unavailable: {
+        'binary_sensor.allears_sound_active': { state: 'unavailable', attributes: {} },
+        'sensor.allears_last_detected_sound': { state: 'unavailable', attributes: {} },
+        'sensor.allears_last_triggered_flow': { state: 'unavailable', attributes: {} },
+      },
+      empty: {},
+    };
+
+    const MOCK_HASS = (stateKey) => ({
+      states: MOCK_STATES[stateKey],
+      config: {
+        internal_url: 'http://homeassistant.local:8123',
+      },
+      callService: (domain, service, data) => {
+        console.log('[allears] callService:', domain, service, data);
+        alert(`✓ HA Service called: ${domain}.${service}`);
+      },
+    });
+
+    let currentState = 'clear';
+    const card = document.getElementById('card');
+    const tag = document.getElementById('state-tag');
+
+    function setState(s) {
+      currentState = s;
+      tag.textContent = 'State: ' + s.charAt(0).toUpperCase() + s.slice(1);
+
+      document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('btn-state-' + (s === 'unavailable' ? 'unavail' : s))?.classList.add('active');
+
+      pushHass(s);
+    }
+
+    function pushHass(s) {
+      // Wait until the element is defined and has setConfig
+      customElements.whenDefined('all-ears-card').then(() => {
+        if (!card._config) {
+          card.setConfig({
+            binary_sensor: 'binary_sensor.allears_sound_active',
+            sound_sensor: 'sensor.allears_last_detected_sound',
+            flow_sensor: 'sensor.allears_last_triggered_flow',
+            device_name: 'AllEars Sound Tracker',
+            location: 'Living Room',
+            firmware: '1.0.0',
+          });
+        }
+        card.hass = MOCK_HASS(s);
+      });
+    }
+
+    // Initial paint
+    customElements.whenDefined('all-ears-card').then(() => pushHass('clear'));
+
+    // Simulate a live state change after 3s on the active state
+    setTimeout(() => {
+      if (currentState === 'clear') {
+        setState('active');
+        setTimeout(() => setState('clear'), 4000);
+      }
+    }, 3000);
+  </script>
+</body>
+
+</html>
