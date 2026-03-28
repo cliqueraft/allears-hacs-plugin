@@ -55,9 +55,7 @@ async def _handle_register_flows(
     flow_names: list[str] = [f.strip() for f in raw_flows.split(",") if f.strip()]
 
     if not flow_names:
-        LOGGER.warning(
-            "register_flows called but 'flows' param is empty or missing."
-        )
+        LOGGER.warning("register_flows called but 'flows' param is empty or missing.")
         return Response(
             status=400,
             body=json.dumps({"error": "flows_param_required"}),
@@ -127,7 +125,6 @@ async def handle_webhook(
             if ts_val is not None
             else int(datetime.now(timezone.utc).timestamp() * 1000),
         }
-
 
         # Step 4 — App identity check (Warn but allow if missing)
         if query.get(ATTR_APP) is None:
