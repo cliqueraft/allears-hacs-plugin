@@ -32,9 +32,13 @@ class AllEarsCard extends HTMLElement {
     };
     // Derive entity IDs from optional overrides
     const base = config.entity_base || '';
-    this._binarySensorId = config.binary_sensor || (base + 'binary_sensor.allears_sound_active');
-    this._soundSensorId = config.sound_sensor || (base + 'sensor.allears_last_detected_sound');
-    this._flowSensorId = config.flow_sensor || (base + 'sensor.allears_last_triggered_flow');
+    this._binarySensorId  = config.binary_sensor  || (base + 'binary_sensor.allears_sound_active');
+    this._soundSensorId   = config.sound_sensor   || (base + 'sensor.allears_last_detected_sound');
+    this._flowSensorId    = config.flow_sensor    || (base + 'sensor.allears_last_triggered_flow');
+    // New: select entity for flow filter (auto-registered by Android app)
+    this._selectEntityId  = config.select_entity  || (base + 'select.allears_active_flow_filter');
+    // Track which flow is selected for activity log filtering
+    this._selectedFlow = 'All Flows';
   }
 
   getCardSize() { return 6; }
@@ -155,9 +159,17 @@ class AllEarsCard extends HTMLElement {
         </div>
       </div>
 
-      <!-- Sensors mini-grid -->
+      <!-- Flow Filter + Sensors -->
       <div class="ae-card">
-        <div class="ae-section-label">SENSORS</div>
+        <div class="ae-section-label">ACTIVE FLOW FILTER</div>
+        <div class="ae-flow-filter-wrap">
+          <ha-icon icon="mdi:waves" class="ae-flow-icon"></ha-icon>
+          <select class="ae-flow-select" id="flow-select">
+            <option value="All Flows">All Flows</option>
+          </select>
+          <span class="ae-flow-hint" id="flow-hint"></span>
+        </div>
+        <div class="ae-section-label" style="margin-top:16px">SENSORS</div>
         <div class="ae-sensor-grid" id="ov-sensor-grid">
           ${this._sensorTile('mdi:microphone', 'Last detected sound', this._sensorVal(this._soundSensorId), 'ov-sound-val')}
           ${this._sensorTile('mdi:waves', 'Last triggered flow', this._sensorVal(this._flowSensorId), 'ov-flow-val')}
@@ -172,19 +184,19 @@ class AllEarsCard extends HTMLElement {
           <div class="ae-action-tile" id="qa-automations">
             <ha-icon icon="mdi:lightning-bolt" class="ae-action-icon"></ha-icon>
             <div class="ae-action-name">Automations</div>
-            <div class="ae-action-sub">0 linked</div>
+            <div class="ae-action-sub">AllEars trigger</div>
             <button class="ae-add-btn" data-action="automation">+ Add</button>
           </div>
           <div class="ae-action-tile" id="qa-scenes">
             <ha-icon icon="mdi:image-multiple" class="ae-action-icon"></ha-icon>
             <div class="ae-action-name">Scenes</div>
-            <div class="ae-action-sub">0 linked</div>
+            <div class="ae-action-sub">Link a scene</div>
             <button class="ae-add-btn" data-action="scene">+ Add</button>
           </div>
           <div class="ae-action-tile" id="qa-scripts">
             <ha-icon icon="mdi:script-text" class="ae-action-icon"></ha-icon>
             <div class="ae-action-name">Scripts</div>
-            <div class="ae-action-sub">0 linked</div>
+            <div class="ae-action-sub">Run a script</div>
             <button class="ae-add-btn" data-action="script">+ Add</button>
           </div>
         </div>
@@ -437,16 +449,48 @@ class AllEarsCard extends HTMLElement {
     // ── Activity: webhook entity id ──
     this._populateWebhookId();
 
+    // ── Flow filter dropdown sync ──
+    this._syncFlowDropdown();
+
     // ── Append to activity log if state changed to active ──
     if (prev && this._activeState === 'active') {
       const prevBin = prev.states[this._binarySensorId];
       const curBin = this._hass.states[this._binarySensorId];
       if (prevBin && curBin && prevBin.state !== 'on' && curBin.state === 'on') {
-        this._addActivityEntry(
-          this._sensorVal(this._soundSensorId),
-          this._sensorVal(this._flowSensorId)
-        );
+        const flowVal = this._sensorVal(this._flowSensorId);
+        const soundVal = this._sensorVal(this._soundSensorId);
+        this._addActivityEntry(soundVal, flowVal);
       }
+    }
+  }
+
+  _syncFlowDropdown() {
+    const selectEl = this._root?.querySelector('#flow-select');
+    if (!selectEl) return;
+
+    const entity = this._hass?.states[this._selectEntityId];
+    const options = entity?.attributes?.options || ['All Flows'];
+    const current = entity?.state || 'All Flows';
+
+    // Rebuild options only if they have changed (avoids flickering)
+    const currentOpts = [...selectEl.options].map(o => o.value);
+    const same = options.length === currentOpts.length &&
+                 options.every((o, i) => o === currentOpts[i]);
+    if (!same) {
+      selectEl.innerHTML = options
+        .map(o => `<option value="${o}"${o === current ? ' selected' : ''}>${o}</option>`)
+        .join('');
+    } else if (selectEl.value !== current) {
+      selectEl.value = current;
+    }
+
+    this._selectedFlow = current;
+
+    const hint = this._root?.querySelector('#flow-hint');
+    if (hint) {
+      hint.textContent = current === 'All Flows'
+        ? 'Showing all events'
+        : `Filtering: ${current}`;
     }
   }
 
@@ -524,14 +568,26 @@ class AllEarsCard extends HTMLElement {
         return;
       }
 
-      // + Add action shortcuts
+      // + Add action shortcuts — deep-link into HA with allears pre-filled
       const addBtn = e.target.closest('.ae-add-btn');
       if (addBtn && this._hass) {
         const action = addBtn.dataset.action;
-        this._hass.auth.data.hassUrl;
-        window.history.pushState(null, '', `/${action}s/new`);
+        if (action === 'automation') {
+          // Pre-fill the automation editor with the allears_sound_detected event trigger
+          window.history.pushState(
+            null, '',
+            '/config/automation/new?trigger_type=event&event_type=allears_sound_detected'
+          );
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        } else {
+          window.history.pushState(null, '', `/${action}s/new`);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
         return;
       }
+
+      // Flow filter dropdown change (native select fires change, not click)
+      // — handled in change listener below
 
       // Copy webhook URL
       if (e.target.closest('#btn-copy-wh')) {
@@ -554,6 +610,22 @@ class AllEarsCard extends HTMLElement {
         this._settings[key] = !this._settings[key];
         toggle.classList.toggle('on', this._settings[key]);
         return;
+      }
+    });
+
+    // Flow filter select — change event
+    root.addEventListener('change', e => {
+      const sel = e.target.closest('#flow-select');
+      if (sel && this._hass) {
+        const chosen = sel.value;
+        this._selectedFlow = chosen;
+        // Write back to the HA select entity
+        this._hass.callService('select', 'select_option', {
+          entity_id: this._selectEntityId,
+          option: chosen,
+        });
+        const hint = root.querySelector('#flow-hint');
+        if (hint) hint.textContent = chosen === 'All Flows' ? 'Showing all events' : `Filtering: ${chosen}`;
       }
     });
 
@@ -839,6 +911,25 @@ class AllEarsCard extends HTMLElement {
         transition: background 0.2s;
       }
       .ae-add-btn:hover { background: rgba(3,169,244,0.1); }
+
+      /* ── Flow filter dropdown ── */
+      .ae-flow-filter-wrap {
+        display: flex; align-items: center; gap: 10px;
+        background: var(--secondary-background-color, rgba(120,120,120,0.08));
+        border: 1px solid var(--divider-color, rgba(255,255,255,0.08));
+        border-radius: 10px; padding: 10px 14px;
+      }
+      .ae-flow-icon { color: var(--info-color, #03a9f4); --mdc-icon-size: 20px; flex-shrink: 0; }
+      .ae-flow-select {
+        flex: 1; appearance: none;
+        background: transparent;
+        border: none; outline: none;
+        color: var(--primary-text-color);
+        font: 500 14px/1 'Roboto', sans-serif;
+        cursor: pointer;
+      }
+      .ae-flow-select option { background: var(--card-background-color, #1c1e26); color: var(--primary-text-color); }
+      .ae-flow-hint { font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; }
 
       /* ── Sensor detail cards ── */
       .ae-sensor-detail-card { }

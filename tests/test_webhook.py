@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
@@ -69,6 +68,43 @@ async def test_webhook_bare_get_returns_200_and_defaults(
     assert data[ATTR_SOUND_CLASS] == "Unknown Sound"
     assert data[ATTR_CONFIDENCE] == 1.0
     assert isinstance(data[ATTR_TIMESTAMP], int)
+
+
+@pytest.mark.asyncio
+async def test_webhook_accepts_app_short_parameters(
+    hass: HomeAssistant,
+    hass_client_no_auth: Any,
+    setup_integration: MockConfigEntry,
+) -> None:
+    """Test the webhook correctly maps short parameters (flow, sound, score, ts) sent by Android app."""
+    events = []
+    hass.bus.async_listen(EVENT_SOUND_DETECTED, events.append)
+
+    client = await hass_client_no_auth()
+    # Mocking a time so we don't hit the timestamp drift rejection
+    import time
+    now_ms = int(time.time() * 1000)
+    
+    resp = await client.get(
+        f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
+        params={
+            "app": "AllEars",
+            "flow": "Test Flow",
+            "sound": "Siren",
+            "score": "0.95",
+            "ts": str(now_ms),
+        },
+    )
+    assert resp.status == HTTPStatus.OK
+    await hass.async_block_till_done()
+    await client.close()
+
+    assert len(events) == 1
+    data = events[0].data
+    assert data[ATTR_FLOW_NAME] == "Test Flow"
+    assert data[ATTR_SOUND_CLASS] == "Siren"
+    assert data[ATTR_CONFIDENCE] == 0.95
+    assert data[ATTR_TIMESTAMP] == now_ms
 
 
 @pytest.mark.asyncio
@@ -145,7 +181,6 @@ async def test_webhook_payload_too_large_returns_413(
 ) -> None:
     """Test the webhook returns 413 Request Entity Too Large on overly large query strings."""
     client = await hass_client_no_auth()
-    # Mocking the size limit to a small value
     with patch("custom_components.allears.webhook.WEBHOOK_MAX_SIZE_BYTES", 10):
         resp = await client.get(
             f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
@@ -230,5 +265,48 @@ async def test_webhook_does_not_crash_on_any_exception(
     body = await resp.json()
     assert body == {"error": "internal_error"}
     assert hass.is_running is True
+    await client.close()
+    await hass.async_block_till_done()
+
+
+@pytest.mark.asyncio
+async def test_webhook_register_flows_stores_in_coordinator(
+    hass: HomeAssistant,
+    hass_client_no_auth: Any,
+    setup_integration: MockConfigEntry,
+) -> None:
+    """Test that action=register_flows stores flows in the coordinator."""
+    client = await hass_client_no_auth()
+    resp = await client.get(
+        f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
+        params={"action": "register_flows", "flows": "Dog Bark,Glass Break,Baby Cry"},
+    )
+    assert resp.status == HTTPStatus.OK
+    body = await resp.json()
+    assert body["status"] == "ok"
+    assert body["registered"] == 3
+
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
+    assert coordinator.flow_list == ["Dog Bark", "Glass Break", "Baby Cry"]
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_webhook_register_flows_empty_returns_400(
+    hass: HomeAssistant,
+    hass_client_no_auth: Any,
+    setup_integration: MockConfigEntry,
+) -> None:
+    """Test that action=register_flows with no flows returns 400."""
+    client = await hass_client_no_auth()
+    resp = await client.get(
+        f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
+        params={"action": "register_flows", "flows": ""},
+    )
+    assert resp.status == HTTPStatus.BAD_REQUEST
+    body = await resp.json()
+    assert body["error"] == "flows_param_required"
     await client.close()
     await hass.async_block_till_done()

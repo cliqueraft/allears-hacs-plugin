@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import secrets
 from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry, ConfigFlow
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.network import get_url
@@ -33,7 +33,10 @@ class AllEarsConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._device_name = user_input[CONF_DEVICE_NAME]
-            self._webhook_id = webhook.async_generate_id()
+            # 8-char hex token — short enough to type, 2^32 combinations.
+            # Deliberately NOT using webhook.async_generate_id() which returns
+            # a 64-char SHA that is impossible to paste on mobile.
+            self._webhook_id = secrets.token_hex(4)
             return await self.async_step_webhook_url()
 
         return self.async_show_form(

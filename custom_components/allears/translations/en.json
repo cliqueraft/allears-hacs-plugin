@@ -28,6 +28,13 @@
       }
     }
   },
+  "entity": {
+    "select": {
+      "active_flow_filter": {
+        "name": "Active Flow Filter"
+      }
+    }
+  },
   "services": {
     "clear_history": {
       "name": "Clear Sound History",

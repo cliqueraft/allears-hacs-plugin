@@ -40,6 +40,43 @@ class AllEarsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._reset_callback: CALLBACK_TYPE | None = None
         self.entry_id = entry_id
 
+        # ── Flow Registry ─────────────────────────────────────────────────────
+        # Populated by the Android app sending:
+        #   GET /api/webhook/<id>?action=register_flows&flows=Flow1,Flow2
+        # The list is ephemeral (in-memory only) — it refreshes on every app
+        # startup, which is fine.  We deliberately do NOT persist this so that
+        # stale flows can't accumulate across app reinstalls.
+        self._flow_registry: list[str] = []
+
+    # ── Flow Registry helpers ─────────────────────────────────────────────────
+
+    @property
+    def flow_list(self) -> list[str]:
+        """Return the current list of registered flow names from the app."""
+        return list(self._flow_registry)
+
+    async def async_register_flows(self, flow_names: list[str]) -> None:
+        """Store the flow catalogue sent by the Android app.
+
+        Called from webhook.py when action=register_flows is received.
+        Triggers a coordinator refresh so the select entity picks up new options.
+        """
+        cleaned = [f.strip() for f in flow_names if f.strip()]
+        if cleaned == self._flow_registry:
+            _LOGGER.debug("Flow registry unchanged — skipping refresh")
+            return
+
+        self._flow_registry = cleaned
+        _LOGGER.info(
+            "AllEars flow registry updated: %s",
+            cleaned[:20],  # cap log to first 20 entries
+        )
+        # Re-broadcast current data so CoordinatorEntity listeners (including
+        # the select entity) see the update and rebuild their options list.
+        self.async_set_updated_data(self.data or {})
+
+    # ── Payload helpers ───────────────────────────────────────────────────────
+
     def _sanitize_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Truncate all string values to LOG_VALUE_MAX_LENGTH for safe logging."""
         sanitized = {}

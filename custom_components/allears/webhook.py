@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 
@@ -11,10 +12,12 @@ from aiohttp.web import Request, Response
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    ACTION_REGISTER_FLOWS,
     ALLEARS_APP_IDENTIFIER,
     ATTR_APP,
     ATTR_CONFIDENCE,
     ATTR_FLOW_NAME,
+    ATTR_FLOWS,
     ATTR_SOUND_CLASS,
     ATTR_TIMESTAMP,
     CONFIDENCE_MAX,
@@ -27,6 +30,52 @@ from .const import (
 from .coordinator import AllEarsDataUpdateCoordinator
 
 LOGGER: logging.Logger = logging.getLogger(__package__)
+
+
+def _find_coordinator(hass: HomeAssistant) -> AllEarsDataUpdateCoordinator | None:
+    """Return the first AllEarsDataUpdateCoordinator found in hass.data."""
+    for entry_coordinator in hass.data.get(DOMAIN, {}).values():
+        if isinstance(entry_coordinator, AllEarsDataUpdateCoordinator):
+            return entry_coordinator
+    return None
+
+
+async def _handle_register_flows(
+    hass: HomeAssistant, query: Mapping[str, str]
+) -> Response:
+    """Handle action=register_flows — store the app's flow catalogue.
+
+    Expected:
+        GET /api/webhook/<id>?action=register_flows&flows=Flow1,Flow2,Flow3
+
+    The flows param is a comma-separated list of flow names.  This is called by
+    the Android app on startup so the HA card can show a live dropdown.
+    """
+    raw_flows: str = query.get(ATTR_FLOWS, "")
+    flow_names: list[str] = [f.strip() for f in raw_flows.split(",") if f.strip()]
+
+    if not flow_names:
+        LOGGER.warning(
+            "register_flows called but 'flows' param is empty or missing."
+        )
+        return Response(
+            status=400,
+            body=json.dumps({"error": "flows_param_required"}),
+            content_type="application/json",
+        )
+
+    coordinator = _find_coordinator(hass)
+    if coordinator is not None:
+        await coordinator.async_register_flows(flow_names)
+        LOGGER.info("Flow registry updated via webhook: %s", flow_names)
+    else:
+        LOGGER.warning("register_flows: no coordinator found — integration not ready?")
+
+    return Response(
+        status=200,
+        body=json.dumps({"status": "ok", "registered": len(flow_names)}),
+        content_type="application/json",
+    )
 
 
 async def handle_webhook(
@@ -43,23 +92,44 @@ async def handle_webhook(
                 content_type="application/json",
             )
 
-        # Step 2 — Extract parameters from query
         query = request.rel_url.query
 
-        # Graceful compatibility: Default values if parameters are missing
-        # This is necessary because the Android app's triggerWebhook action
-        # currently sends a bare GET request without query parameters.
+        # Step 2 — Route registration action before normal sound processing
+        action = query.get("action")
+        if action == ACTION_REGISTER_FLOWS:
+            return await _handle_register_flows(hass, query)
+
+        # Step 3 — Extract parameters, supporting both legacy and new Android app keys
+        flow_val = query.get(ATTR_FLOW_NAME) or query.get("flow")
+        sound_val = query.get(ATTR_SOUND_CLASS) or query.get("sound")
+        conf_val = query.get(ATTR_CONFIDENCE) or query.get("score")
+        ts_val = query.get(ATTR_TIMESTAMP) or query.get("ts")
+
+        missing_params: list[str] = []
+        if flow_val is None:
+            missing_params.append("flow")
+        if sound_val is None:
+            missing_params.append("sound")
+        if missing_params:
+            LOGGER.warning(
+                "Webhook missing params %s — using defaults. "
+                "Ensure AllEars app is sending query params.",
+                missing_params,
+            )
+
+        # Graceful compatibility: fill defaults so the integration stays functional
         payload: dict[str, Any] = {
             ATTR_APP: query.get(ATTR_APP, ALLEARS_APP_IDENTIFIER),
-            ATTR_FLOW_NAME: query.get(ATTR_FLOW_NAME, "Manual Trigger"),
-            ATTR_SOUND_CLASS: query.get(ATTR_SOUND_CLASS, "Unknown Sound"),
-            ATTR_CONFIDENCE: query.get(ATTR_CONFIDENCE, 1.0),
-            ATTR_TIMESTAMP: query.get(
-                ATTR_TIMESTAMP, int(datetime.now(timezone.utc).timestamp() * 1000)
-            ),
+            ATTR_FLOW_NAME: flow_val if flow_val is not None else "Manual Trigger",
+            ATTR_SOUND_CLASS: sound_val if sound_val is not None else "Unknown Sound",
+            ATTR_CONFIDENCE: conf_val if conf_val is not None else 1.0,
+            ATTR_TIMESTAMP: ts_val
+            if ts_val is not None
+            else int(datetime.now(timezone.utc).timestamp() * 1000),
         }
 
-        # Step 3 — App identity check (Warn but allow if missing)
+
+        # Step 4 — App identity check (Warn but allow if missing)
         if query.get(ATTR_APP) is None:
             LOGGER.debug(
                 "Webhook received without app identifier, defaulting to %s",
@@ -77,7 +147,7 @@ async def handle_webhook(
                 content_type="application/json",
             )
 
-        # Step 4 — Type casting and validation
+        # Step 5 — Type casting and validation
         try:
             confidence = float(payload[ATTR_CONFIDENCE])
             payload[ATTR_CONFIDENCE] = confidence
@@ -120,7 +190,7 @@ async def handle_webhook(
                 content_type="application/json",
             )
 
-        # Step 5 — Timestamp drift check (Skip if initially missing)
+        # Step 6 — Timestamp drift check (Skip if initially missing)
         if query.get(ATTR_TIMESTAMP) is not None:
             now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
             drift_ms = timestamp - now_ms
@@ -131,13 +201,8 @@ async def handle_webhook(
                     content_type="application/json",
                 )
 
-        # Step 6 — Pass to coordinator and fire event
-        coordinator: AllEarsDataUpdateCoordinator | None = None
-        for entry_coordinator in hass.data.get(DOMAIN, {}).values():
-            if isinstance(entry_coordinator, AllEarsDataUpdateCoordinator):
-                coordinator = entry_coordinator
-                break
-
+        # Step 7 — Pass to coordinator and fire event
+        coordinator = _find_coordinator(hass)
         if isinstance(coordinator, AllEarsDataUpdateCoordinator):
             await coordinator.async_handle_sound_event(payload)
 
