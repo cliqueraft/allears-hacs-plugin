@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import pathlib
 
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components import webhook as ha_webhook
@@ -30,10 +31,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the AllEars component."""
     hass.data.setdefault(DOMAIN, {})
 
-    # Automatically serve the Lovelace card from our integration folder
-    hass.http.register_static_path(
-        "/all-ears-card", hass.config.path("custom_components/allears/www"), True
-    )
+    # Serve the Lovelace card from the integration's www folder.
+    # Use __file__ so the path is always correct, regardless of HA config dir.
+    www_dir = pathlib.Path(__file__).parent / "www"
+    try:
+        hass.http.register_static_path("/all-ears-card", str(www_dir))
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning("Could not register AllEars static path (non-fatal)")
 
     return True
 
