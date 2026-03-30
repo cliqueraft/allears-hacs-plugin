@@ -29,6 +29,12 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the AllEars component."""
     hass.data.setdefault(DOMAIN, {})
+
+    # Automatically serve the Lovelace card from our integration folder
+    hass.http.register_static_path(
+        "/all-ears-card", hass.config.path("custom_components/allears/www"), True
+    )
+
     return True
 
 

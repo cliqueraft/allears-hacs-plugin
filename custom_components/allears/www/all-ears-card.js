@@ -21,6 +21,18 @@ class AllEarsCard extends HTMLElement {
     this._activityLog = [];
   }
 
+  static getStubConfig() {
+    return {
+      type: "custom:all-ears-card",
+      device_name: "AllEars Sound Tracker",
+      location: "Living Room",
+      firmware: "1.0.0",
+      notifications: true,
+      soundAlerts: false,
+      logEvents: true
+    };
+  }
+
   // ─── Lovelace lifecycle ──────────────────────────────────────────────────
 
   setConfig(config) {

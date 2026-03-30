@@ -49,6 +49,19 @@ Paste the URL → Save
 In HA: Developer Tools → Services → `allears.test_webhook` → Call
 The `sensor.last_detected_sound` entity should show "Test Sound"
 
+## Lovelace Dashboard Card
+AllEars includes a beautiful, native-feeling custom card for your dashboard.
+
+**Step 1: Register the Resource**
+1. Settings → Dashboards → Resources (top right 3-dot menu) → Add Resource
+2. URL: `/all-ears-card/all-ears-card.js`
+3. Resource Type: `JavaScript Module`
+
+**Step 2: Add the Card**
+1. Go to your Dashboard → Edit Dashboard → Add Card
+2. Search for **AllEars Sound Tracker**
+3. Configure your card using the built-in visual editor!
+
 ## Webhook Specification
 The integration robustly relies on **GET** requests with **URL Query Parameters** to guarantee compliance with all variants of the Android client.
 
