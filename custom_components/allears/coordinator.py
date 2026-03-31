@@ -10,6 +10,8 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from homeassistant.helpers.storage import Store
+
 from .const import (
     ATTR_APP,
     ATTR_CONFIDENCE,
@@ -24,6 +26,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+STORAGE_KEY = f"{DOMAIN}_flows"
+STORAGE_VERSION = 1
 
 
 class AllEarsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -43,10 +48,9 @@ class AllEarsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # ── Flow Registry ─────────────────────────────────────────────────────
         # Populated by the Android app sending:
         #   GET /api/webhook/<id>?action=register_flows&flows=Flow1,Flow2
-        # The list is ephemeral (in-memory only) — it refreshes on every app
-        # startup, which is fine.  We deliberately do NOT persist this so that
-        # stale flows can't accumulate across app reinstalls.
+        # Now persistent across Home Assistant restarts via Store.
         self._flow_registry: list[str] = []
+        self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
 
     # ── Flow Registry helpers ─────────────────────────────────────────────────
 
@@ -54,6 +58,15 @@ class AllEarsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def flow_list(self) -> list[str]:
         """Return the current list of registered flow names from the app."""
         return list(self._flow_registry)
+
+    async def async_load_flows(self) -> None:
+        """Load saved flow list from storage on startup."""
+        data = await self._store.async_load()
+        if data and isinstance(data, dict):
+            saved_flows = data.get("flows", [])
+            if isinstance(saved_flows, list):
+                self._flow_registry = saved_flows
+                _LOGGER.debug("Loaded %d flows from storage", len(saved_flows))
 
     async def async_register_flows(self, flow_names: list[str]) -> None:
         """Store the flow catalogue sent by the Android app.
@@ -67,8 +80,9 @@ class AllEarsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         self._flow_registry = cleaned
+        await self._store.async_save({"flows": cleaned})
         _LOGGER.info(
-            "AllEars flow registry updated: %s",
+            "AllEars flow registry updated and saved: %s",
             cleaned[:20],  # cap log to first 20 entries
         )
         # Re-broadcast current data so CoordinatorEntity listeners (including

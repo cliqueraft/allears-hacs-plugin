@@ -51,6 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
 
     coordinator = AllEarsDataUpdateCoordinator(hass, entry.entry_id)
+    await coordinator.async_load_flows()
 
     ha_webhook.async_register(
         hass,

@@ -18,3 +18,7 @@ coverage.xml
 .vscode/
 .idea/
 .DS_Store
+
+# Home Assistant local development
+config/
+.storage/

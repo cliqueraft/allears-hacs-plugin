@@ -98,20 +98,6 @@ class AllEarsLastSoundSensor(
         return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        if not self.coordinator.data:
-            return {}
-        conf = self.coordinator.data.get(ATTR_CONFIDENCE)
-        raw_ts: int | None = self.coordinator.data.get(ATTR_TIMESTAMP)
-        return {
-            ATTR_FLOW_NAME: self.coordinator.data.get(ATTR_FLOW_NAME),
-            ATTR_CONFIDENCE: float(f"{float(conf):.3f}") if conf is not None else None,
-            ATTR_TIMESTAMP: _epoch_ms_to_iso8601(raw_ts) if raw_ts else None,
-            "last_updated": self.coordinator.data.get("last_updated"),
-        }
-
-    @property
     def device_info(self) -> DeviceInfo:
         """Return device information."""
         return self._attr_device_info
@@ -141,17 +127,6 @@ class AllEarsLastFlowSensor(
             val = self.coordinator.data.get(ATTR_FLOW_NAME)
             return str(val) if val is not None else None
         return None
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        if not self.coordinator.data:
-            return {}
-        raw_ts: int | None = self.coordinator.data.get(ATTR_TIMESTAMP)
-        return {
-            ATTR_SOUND_CLASS: self.coordinator.data.get(ATTR_SOUND_CLASS),
-            ATTR_TIMESTAMP: _epoch_ms_to_iso8601(raw_ts) if raw_ts else None,
-        }
 
     @property
     def device_info(self) -> DeviceInfo:

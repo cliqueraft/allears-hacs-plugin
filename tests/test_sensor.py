@@ -54,64 +54,6 @@ async def test_last_sound_sensor_state_updates_after_event(
 
 
 @pytest.mark.asyncio
-async def test_last_sound_sensor_attributes_contain_confidence(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
-) -> None:
-    """Test the last sound sensor attributes contain the confidence score."""
-    coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
-    await coordinator.async_handle_sound_event(valid_payload)
-    await hass.async_block_till_done()
-
-    entity_registry = er.async_get(hass)
-    entity_id = entity_registry.async_get_entity_id(
-        "sensor", DOMAIN, f"{ENTRY_ID_FOR_TESTS}_{SENSOR_LAST_SOUND}"
-    )
-    state = hass.states.get(entity_id)
-    assert ATTR_CONFIDENCE in state.attributes
-    assert isinstance(state.attributes[ATTR_CONFIDENCE], float)
-
-
-@pytest.mark.asyncio
-async def test_last_sound_sensor_confidence_rounded_to_3dp(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
-) -> None:
-    """Test the last sound sensor rounds the confidence to 3 decimal places."""
-    payload = dict(valid_payload)
-    payload[ATTR_CONFIDENCE] = 0.876543
-    coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
-    await coordinator.async_handle_sound_event(payload)
-    await hass.async_block_till_done()
-
-    entity_registry = er.async_get(hass)
-    entity_id = entity_registry.async_get_entity_id(
-        "sensor", DOMAIN, f"{ENTRY_ID_FOR_TESTS}_{SENSOR_LAST_SOUND}"
-    )
-    state = hass.states.get(entity_id)
-    assert state.attributes[ATTR_CONFIDENCE] == 0.877
-
-
-@pytest.mark.asyncio
-async def test_last_sound_sensor_timestamp_is_iso8601(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
-) -> None:
-    """Test the last sound sensor timestamp attribute is an ISO8601 string."""
-    payload = dict(valid_payload)
-    payload[ATTR_TIMESTAMP] = 1711132800000
-    coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
-    await coordinator.async_handle_sound_event(payload)
-    await hass.async_block_till_done()
-
-    entity_registry = er.async_get(hass)
-    entity_id = entity_registry.async_get_entity_id(
-        "sensor", DOMAIN, f"{ENTRY_ID_FOR_TESTS}_{SENSOR_LAST_SOUND}"
-    )
-    state = hass.states.get(entity_id)
-    val = state.attributes[ATTR_TIMESTAMP]
-    assert isinstance(val, str)
-    assert datetime.fromisoformat(val)
-
-
-@pytest.mark.asyncio
 async def test_last_flow_sensor_state_updates_after_event(
     hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
 ) -> None:

@@ -40,9 +40,9 @@ DEFAULT_DEVICE_NAME: Final[str] = "AllEars Device"
 ALLEARS_APP_IDENTIFIER: Final[str] = "AllEars"
 
 # Sensor names
-SENSOR_LAST_SOUND_NAME: Final[str] = "Last Detected Sound"
-SENSOR_LAST_FLOW_NAME: Final[str] = "Last Triggered Flow"
-BINARY_SENSOR_ACTIVE_NAME: Final[str] = "Sound Active"
+SENSOR_LAST_SOUND_NAME: Final[str] = "AllEars Sound"
+SENSOR_LAST_FLOW_NAME: Final[str] = "AllEars Flow"
+BINARY_SENSOR_ACTIVE_NAME: Final[str] = "AllEars Sound Active"
 
 # Icons
 ICON_MICROPHONE: Final[str] = "mdi:microphone"
@@ -78,7 +78,7 @@ SOURCE_TYPE_SOUND: Final[str] = "sound"
 
 # ── Select entity — Active Flow Filter ───────────────────────────────────────
 SELECT_FLOW_FILTER: Final[str] = "active_flow_filter"
-SELECT_FLOW_FILTER_NAME: Final[str] = "Active Flow Filter"
+SELECT_FLOW_FILTER_NAME: Final[str] = "AllEars Active Flow Filter"
 SELECT_ALL_FLOWS: Final[str] = "All Flows"
 
 # Fired on the HA event bus when the user picks a flow in the card dropdown.

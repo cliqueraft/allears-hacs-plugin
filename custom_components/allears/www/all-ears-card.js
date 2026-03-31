@@ -237,14 +237,9 @@ class AllEarsCard extends HTMLElement {
             <ha-icon icon="mdi:microphone"></ha-icon>
           </div>
           <div>
-            <div class="ae-label">LAST DETECTED SOUND</div>
+            <div class="ae-label">SOUND DETECTED</div>
             <div class="ae-sensor-detail-value" id="sd-sound-val">${this._sensorVal(this._soundSensorId)}</div>
           </div>
-        </div>
-        <div class="ae-sensor-attrs">
-          <div class="ae-attr-row"><span class="ae-label">CONFIDENCE</span><span id="sd-sound-conf">—</span></div>
-          <div class="ae-attr-row"><span class="ae-label">FLOW</span><span id="sd-sound-flow">—</span></div>
-          <div class="ae-attr-row"><span class="ae-label">TIMESTAMP</span><span id="sd-sound-ts">—</span></div>
         </div>
       </div>
 
@@ -254,13 +249,9 @@ class AllEarsCard extends HTMLElement {
             <ha-icon icon="mdi:waves"></ha-icon>
           </div>
           <div>
-            <div class="ae-label">LAST TRIGGERED FLOW</div>
+            <div class="ae-label">FLOW TRIGGERED</div>
             <div class="ae-sensor-detail-value" id="sd-flow-val">${this._sensorVal(this._flowSensorId)}</div>
           </div>
-        </div>
-        <div class="ae-sensor-attrs">
-          <div class="ae-attr-row"><span class="ae-label">SOUND CLASS</span><span id="sd-flow-sound">—</span></div>
-          <div class="ae-attr-row"><span class="ae-label">TIMESTAMP</span><span id="sd-flow-ts">—</span></div>
         </div>
       </div>
 
@@ -393,6 +384,22 @@ class AllEarsCard extends HTMLElement {
 
   // ─── State Sync (runs on every hass update) ──────────────────────────────
 
+  _getFilteredLatestSound() {
+    if (this._selectedFlow === 'All Flows') {
+      return this._sensorVal(this._soundSensorId);
+    }
+    const matched = this._activityLog.find(e => e.flow === this._selectedFlow);
+    return matched ? matched.sound : 'Waiting...';
+  }
+
+  _getFilteredLatestFlow() {
+    if (this._selectedFlow === 'All Flows') {
+      return this._sensorVal(this._flowSensorId);
+    }
+    const matched = this._activityLog.find(e => e.flow === this._selectedFlow);
+    return matched ? matched.flow : 'Waiting...';
+  }
+
   _syncState(prev) {
     const root = this._root;
     const state = this._activeState;
@@ -423,8 +430,8 @@ class AllEarsCard extends HTMLElement {
     }
 
     // ── Overview sensor tiles ──
-    this._setText('#ov-sound-val', this._sensorVal(this._soundSensorId));
-    this._setText('#ov-flow-val', this._sensorVal(this._flowSensorId));
+    this._setText('#ov-sound-val', this._getFilteredLatestSound());
+    this._setText('#ov-flow-val', this._getFilteredLatestFlow());
 
     const activeTile = root.querySelector('#ov-active-val-tile');
     const activeVal = root.querySelector('#ov-active-val');
@@ -440,18 +447,6 @@ class AllEarsCard extends HTMLElement {
     this._setText('#sd-sound-val', this._sensorVal(this._soundSensorId));
     this._setText('#sd-flow-val', this._sensorVal(this._flowSensorId));
     this._setText('#sd-active-val', state === 'active' ? 'Active' : state === 'unavailable' ? 'Unavailable' : 'Clear');
-
-    const conf = this._sensorAttr(this._soundSensorId, 'confidence');
-    this._setText('#sd-sound-conf', conf != null ? (parseFloat(conf) * 100).toFixed(0) + '%' : '—');
-    const flowAttr = this._sensorAttr(this._soundSensorId, 'flow_name');
-    this._setText('#sd-sound-flow', flowAttr || '—');
-    const tsAttr = this._sensorAttr(this._soundSensorId, 'timestamp');
-    this._setText('#sd-sound-ts', tsAttr ? this._fmtTime(tsAttr) : '—');
-
-    const soundAttr = this._sensorAttr(this._flowSensorId, 'sound_class');
-    this._setText('#sd-flow-sound', soundAttr || '—');
-    const flowTs = this._sensorAttr(this._flowSensorId, 'timestamp');
-    this._setText('#sd-flow-ts', flowTs ? this._fmtTime(flowTs) : '—');
 
     const sdActiveWrap = root.querySelector('#sd-active-wrap');
     if (sdActiveWrap) {
@@ -534,7 +529,12 @@ class AllEarsCard extends HTMLElement {
   _renderActivityList() {
     const list = this._root.querySelector('#act-list');
     if (!list) return;
-    if (this._activityLog.length === 0) {
+
+    const displayLog = this._selectedFlow === 'All Flows' 
+      ? this._activityLog 
+      : this._activityLog.filter(e => e.flow === this._selectedFlow);
+
+    if (displayLog.length === 0) {
       list.innerHTML = `
         <div class="ae-empty-state">
           <ha-icon icon="mdi:ear-hearing" class="ae-empty-icon"></ha-icon>
@@ -542,7 +542,7 @@ class AllEarsCard extends HTMLElement {
         </div>`;
       return;
     }
-    list.innerHTML = this._activityLog.map(e => `
+    list.innerHTML = displayLog.map(e => `
       <div class="ae-act-row">
         <div class="ae-act-icon-wrap"><ha-icon icon="mdi:microphone"></ha-icon></div>
         <div class="ae-act-body">
@@ -638,6 +638,9 @@ class AllEarsCard extends HTMLElement {
         });
         const hint = root.querySelector('#flow-hint');
         if (hint) hint.textContent = chosen === 'All Flows' ? 'Showing all events' : `Filtering: ${chosen}`;
+        this._setText('#ov-sound-val', this._getFilteredLatestSound());
+        this._setText('#ov-flow-val', this._getFilteredLatestFlow());
+        this._renderActivityList();
       }
     });
 
