@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -14,10 +13,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ALLEARS_APP_IDENTIFIER,
-    ATTR_CONFIDENCE,
     ATTR_FLOW_NAME,
     ATTR_SOUND_CLASS,
-    ATTR_TIMESTAMP,
     CONF_DEVICE_NAME,
     DOMAIN,
     ICON_MICROPHONE,
