@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -108,6 +108,7 @@ class AllEarsLastFlowSensor(
     _attr_has_entity_name = True
     _attr_name = SENSOR_LAST_FLOW_NAME
     _attr_icon = ICON_WAVES
+    _attr_device_class = SensorDeviceClass.ENUM
 
     def __init__(
         self, coordinator: AllEarsDataUpdateCoordinator, entry: ConfigEntry
@@ -124,6 +125,22 @@ class AllEarsLastFlowSensor(
             val = self.coordinator.data.get(ATTR_FLOW_NAME)
             return str(val) if val is not None else None
         return None
+
+    @property
+    def options(self) -> list[str] | None:
+        """Return a list of available flows to populate HA automation dropdowns.
+        
+        Using SensorDeviceClass.ENUM makes Home Assistant automatically build
+        dropdown menus in the Automation UI for Device and State triggers.
+        """
+        flows = self.coordinator.flow_list.copy() if self.coordinator.flow_list else []
+        current = self.native_value
+        
+        # In ENUM sensors, current state MUST exist in the options list.
+        if current and current not in flows:
+            flows.append(current)
+
+        return flows if flows else None
 
     @property
     def device_info(self) -> DeviceInfo:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 import pytest
@@ -12,8 +11,6 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.allears.const import (
-    ATTR_CONFIDENCE,
-    ATTR_TIMESTAMP,
     DOMAIN,
     SENSOR_LAST_FLOW,
     SENSOR_LAST_SOUND,
