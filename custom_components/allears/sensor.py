@@ -129,13 +129,13 @@ class AllEarsLastFlowSensor(
     @property
     def options(self) -> list[str] | None:
         """Return a list of available flows to populate HA automation dropdowns.
-        
+
         Using SensorDeviceClass.ENUM makes Home Assistant automatically build
         dropdown menus in the Automation UI for Device and State triggers.
         """
         flows = self.coordinator.flow_list.copy() if self.coordinator.flow_list else []
         current = self.native_value
-        
+
         # In ENUM sensors, current state MUST exist in the options list.
         if current and current not in flows:
             flows.append(current)
