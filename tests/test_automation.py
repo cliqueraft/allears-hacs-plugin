@@ -79,3 +79,72 @@ async def test_end_to_end_automation_trigger(
     print(
         "SUCCESS: The automation successfully caught the 'Speech test' flow and executed its action!"
     )
+
+
+@pytest.mark.asyncio
+async def test_end_to_end_native_device_trigger(
+    hass: HomeAssistant, setup_integration: MockConfigEntry
+) -> None:
+    """Test that our new native device trigger successfully runs an automation."""
+    # 1. Setup an input boolean to act as our 'light bulb'
+    assert await async_setup_component(
+        hass, "input_boolean", {"input_boolean": {"test_native_success": {}}}
+    )
+
+    # 2. Setup the automation using the exact YAML output HA generates for a Device/Event Trigger
+    device_registry = hass.helpers.device_registry.async_get(hass)
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, setup_integration.entry_id)}
+    )
+    assert device is not None
+
+    assert await async_setup_component(
+        hass,
+        automation.DOMAIN,
+        {
+            automation.DOMAIN: [
+                {
+                    "alias": "Test AllEars Native Trigger",
+                    "description": "Fires when AllEars app triggers 'Doorbell' flow via native event",
+                    "trigger": [
+                        {
+                            "platform": "device",
+                            "domain": DOMAIN,
+                            "device_id": device.id,
+                            "type": "sound_detected",
+                            "flow_name": "Doorbell",
+                        }
+                    ],
+                    "action": [
+                        {
+                            "service": "input_boolean.turn_on",
+                            "target": {
+                                "entity_id": "input_boolean.test_native_success"
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    await hass.async_block_till_done()
+
+    # Verify 'off' initially
+    assert hass.states.get("input_boolean.test_native_success").state == "off"
+
+    # 3. Simulate the Webhook firing the EVENT_SOUND_DETECTED event
+    from custom_components.allears.const import EVENT_SOUND_DETECTED
+
+    payload = {
+        "app": "AllEars",
+        "flow_name": "Doorbell",
+        "sound_class": "doorbell",
+        "confidence": 0.99,
+        "timestamp": 1234567890000,
+    }
+    hass.bus.async_fire(EVENT_SOUND_DETECTED, payload)
+    await hass.async_block_till_done()
+
+    # 4. Prove the automation successfully fired and flipped the switch!
+    assert hass.states.get("input_boolean.test_native_success").state == "on"
