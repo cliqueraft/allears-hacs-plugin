@@ -92,7 +92,8 @@ async def test_end_to_end_native_device_trigger(
     )
 
     # 2. Setup the automation using the exact YAML output HA generates for a Device/Event Trigger
-    device_registry = hass.helpers.device_registry.async_get(hass)
+    from homeassistant.helpers import device_registry as dr
+    device_registry = dr.async_get(hass)
     device = device_registry.async_get_device(
         identifiers={(DOMAIN, setup_integration.entry_id)}
     )
