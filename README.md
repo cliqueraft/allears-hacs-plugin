@@ -93,26 +93,31 @@ All `extra_state_attributes` exposed by `sensor.last_detected_sound`:
 | `allears.test_webhook` | Fires a synthetic sound event (sound_class="Test Sound", confidence=1.0). Use this to verify your HA automations are wired correctly. | None |
 
 ## Automation examples
-### Example 1 — Alert on glass breaking:
+
+You should exclusively use the native Home Assistant **Device Trigger** the integration automatically creates for you. It handles flow names and sound matches instantly and natively!
+
+### Example 1 — Alert on glass breaking via "Security" flow:
+Using the Home Assistant Visual Automation Editor:
+1. Triggers → Add Trigger → **Device**
+2. Select your `AllEars Device`
+3. Trigger: **AllEars detects a sound**
+4. Flow Name: `Security` 
+
+**YAML Equivalent:**
 ```yaml
 automation:
   alias: "Alert on glass breaking"
   trigger:
-    - platform: state
-      entity_id: sensor.last_detected_sound
-      to: "Glass Breaking"
-  condition:
-    - condition: numeric_state
-      entity_id: sensor.last_detected_sound
-      attribute: confidence
-      above: 0.7
+    - platform: device
+      domain: allears
+      device_id: <your-device-id>
+      type: sound_detected
+      flow_name: "Security"
   action:
     - service: notify.mobile_app
       data:
         title: "AllEars Alert"
-        message: >
-          Glass breaking detected by
-          {{ trigger.to_state.attributes.flow_name }}
+        message: "Glass breaking detected by the Security flow!"
 ```
 
 ### Example 2 — Trigger a siren while sound_active is on:
