@@ -44,5 +44,11 @@
       "name": "Test Webhook",
       "description": "Fires a synthetic AllEars sound event. Use this to verify that your HA automations are configured correctly before testing with the real Android app."
     }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "sound_detected": "AllEars detects a sound"
+    }
   }
 }
+

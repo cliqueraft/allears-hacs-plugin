@@ -94,3 +94,4 @@ async def test_options_flow_allows_device_rename(
     assert result["type"] == FlowResultType.CREATE_ENTRY
     entry = hass.config_entries.async_get_entry(mock_config_entry.entry_id)
     assert entry.data[CONF_DEVICE_NAME] == renamed_device
+    await hass.async_block_till_done()
