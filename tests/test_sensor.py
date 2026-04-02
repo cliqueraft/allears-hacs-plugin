@@ -35,7 +35,9 @@ async def test_last_sound_sensor_state_unknown_before_first_event(
 
 @pytest.mark.asyncio
 async def test_last_sound_sensor_state_updates_after_event(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    valid_payload: dict[str, Any],
 ) -> None:
     """Test the last sound sensor state updates after an event."""
     coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
@@ -52,7 +54,9 @@ async def test_last_sound_sensor_state_updates_after_event(
 
 @pytest.mark.asyncio
 async def test_last_flow_sensor_state_updates_after_event(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    valid_payload: dict[str, Any],
 ) -> None:
     """Test the last flow sensor state updates after an event."""
     coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]

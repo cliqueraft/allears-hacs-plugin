@@ -1,6 +1,3 @@
-# How the Home Assistant Interface Works
-
-With the latest updates, the Lovelace card interface (`all-ears-card.js`) is automatically served directly by the backend Python integration! 
 
 ### Step 1: Register the Dashboard Resource
 Since the integration serves the file for you, you simply have to tell your Home Assistant dashboard where to find it.

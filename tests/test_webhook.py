@@ -83,8 +83,9 @@ async def test_webhook_accepts_app_short_parameters(
     client = await hass_client_no_auth()
     # Mocking a time so we don't hit the timestamp drift rejection
     import time
+
     now_ms = int(time.time() * 1000)
-    
+
     resp = await client.get(
         f"/api/webhook/{WEBHOOK_ID_FOR_TESTS}",
         params={

@@ -41,7 +41,9 @@ async def test_sound_active_false_before_first_event(
 
 @pytest.mark.asyncio
 async def test_sound_active_true_immediately_after_event(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    valid_payload: dict[str, Any],
 ) -> None:
     """Test the sound active binary sensor turns on immediately after an event."""
     coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
@@ -58,7 +60,9 @@ async def test_sound_active_true_immediately_after_event(
 
 @pytest.mark.asyncio
 async def test_sound_active_resets_to_false_after_30s(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    valid_payload: dict[str, Any],
 ) -> None:
     """Test the sound active binary sensor resets to off after the active window."""
     coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
@@ -84,7 +88,10 @@ async def test_sound_active_resets_to_false_after_30s(
 
 @pytest.mark.asyncio
 async def test_sound_active_debounces_rapid_events(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any], freezer: FrozenDateTimeFactory
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    valid_payload: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Test the sound active binary sensor debounces rapid events."""
     coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
@@ -123,7 +130,9 @@ async def test_sound_active_debounces_rapid_events(
 
 @pytest.mark.asyncio
 async def test_sound_active_cancel_callback_on_remove(
-    hass: HomeAssistant, setup_integration: MockConfigEntry, valid_payload: dict[str, Any]
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    valid_payload: dict[str, Any],
 ) -> None:
     """Test the sound active binary sensor cancels its reset callback on removal."""
     coordinator: AllEarsDataUpdateCoordinator = hass.data[DOMAIN][ENTRY_ID_FOR_TESTS]
