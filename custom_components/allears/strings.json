@@ -47,7 +47,7 @@
   },
   "device_automation": {
     "trigger_type": {
-      "sound_detected": "AllEars detects a sound"
+      "sound_detected": "AllEars triggered a flow"
     }
   }
 }

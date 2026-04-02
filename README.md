@@ -100,7 +100,7 @@ You should exclusively use the native Home Assistant **Device Trigger** the inte
 Using the Home Assistant Visual Automation Editor:
 1. Triggers → Add Trigger → **Device**
 2. Select your `AllEars Device`
-3. Trigger: **AllEars detects a sound**
+3. Trigger: **AllEars triggered a flow**
 4. Flow Name: `Security` 
 
 **YAML Equivalent:**
