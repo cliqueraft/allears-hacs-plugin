@@ -115,7 +115,7 @@ class AllEarsCard extends HTMLElement {
             <div class="ae-wave" id="hdr-wave">
               <span></span><span></span><span></span><span></span>
             </div>
-            <ha-icon icon="mdi:ear-hearing" id="hdr-ha-icon"></ha-icon>
+            <img class="ae-logo-img" id="hdr-logo-img" alt="AllEars" />
           </div>
           <div>
             <div class="ae-title">${this._config.device_name}</div>
@@ -419,7 +419,18 @@ class AllEarsCard extends HTMLElement {
       else { pillLabel.textContent = 'Listening'; }
 
       hdrIcon.className = 'ae-header-icon' + (state === 'active' ? ' active' : '');
-      if (hdrHaIcon) hdrHaIcon.setAttribute('icon', state === 'unavailable' ? 'mdi:ear-hearing-off' : 'mdi:ear-hearing');
+      const hdrLogoImg = root.querySelector('#hdr-logo-img');
+      if (hdrLogoImg && !hdrLogoImg.src) {
+         try {
+           hdrLogoImg.src = new URL('./logo.png', import.meta.url).href;
+         } catch(e) {
+           hdrLogoImg.src = '/all-ears-card/logo.png';
+         }
+      }
+      if (hdrLogoImg) {
+         hdrLogoImg.style.opacity = state === 'unavailable' ? '0.5' : '1';
+         hdrLogoImg.style.filter = state === 'unavailable' ? 'grayscale(100%)' : 'none';
+      }
     }
 
     // ── Monitor card ──
@@ -754,7 +765,8 @@ class AllEarsCard extends HTMLElement {
       }
       .ae-header-icon.active { background: var(--warning-color); color: #fff; }
       .ae-header-icon.active .ae-wave { display: flex; }
-      .ae-header-icon.active ha-icon { display: none; }
+      .ae-header-icon.active .ae-logo-img { display: none; }
+      .ae-logo-img { width: 28px; height: 28px; object-fit: contain; }
 
       .ae-wave {
         display: none; align-items: center; gap: 3px; height: 22px;
