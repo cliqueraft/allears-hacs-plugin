@@ -24,8 +24,8 @@ jobs:
           - python-version: "3.13"
             ha-version: "latest"
             phcc-version: ""
-            # pycares 5 removed names that HA's pinned aiodns still uses.
-            extra-deps: "pycares<5"
+            # aiodns 4.0 (pinned by HA) needs the pycares 5 API; newer pycares breaks it.
+            extra-deps: "pycares>=5,<6"
 
     steps:
       - uses: actions/checkout@v4
