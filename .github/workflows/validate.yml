@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # HACS re-checks listed repositories; a daily run catches breakage early.
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions: {}
 
 jobs:
   hacs-validate:

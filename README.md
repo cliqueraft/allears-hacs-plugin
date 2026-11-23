@@ -22,6 +22,8 @@ This integration receives classified sound events directly from the AllEars Andr
 3. Click the three-dot menu → Custom repositories
 4. Add: `https://github.com/cliqueraft/allears-hacs-plugin` — category: Integration
 5. Search for "AllEars Sound Tracker" → Download
+
+Once AllEars is listed in the HACS default store, skip steps 3 and 4: just search for "AllEars Sound Tracker" in HACS.
 6. Restart Home Assistant
 
 ### Method B — Manual:
