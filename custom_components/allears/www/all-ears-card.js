@@ -1,1138 +1,469 @@
 /**
- * AllEars Sound Tracker — Full Dashboard Custom Card
- * Lovelace Web Component | Vanilla JS | Uses HA CSS Variables Only
+ * AllEars dashboard card.
+ *
+ * Finds the AllEars entities by device (no hard-coded entity ids), shows the
+ * live listening state, the last sound with its flow and confidence, the
+ * phone's connection status, the registered flows and the recent history from
+ * the recorder. Vanilla web component, HA theme variables only.
  */
 
-const DOMAIN = 'allears';
+const AE_DOMAIN = 'allears';
+const AE_VERSION = '1.1.0';
+const AE_ALL_FLOWS = 'All Flows';
+// App logo served next to this file (/all-ears-card/logo.png).
+const AE_LOGO_URL = (() => {
+  try {
+    return new URL('./logo.png', import.meta.url).href;
+  } catch (e) {
+    return '/all-ears-card/logo.png';
+  }
+})();
+
+const aeEsc = (v) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function aeAgo(ms, now = Date.now()) {
+  if (!ms) return '';
+  const s = Math.max(0, Math.round((now - ms) / 1000));
+  if (s < 45) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.round(h / 24);
+  return `${d} d ago`;
+}
+
+/** All AllEars devices, each with its entities, from the frontend registries. */
+function aeDevices(hass) {
+  const devices = {};
+  for (const ent of Object.values(hass?.entities || {})) {
+    if (ent.platform !== AE_DOMAIN || !ent.device_id) continue;
+    const dev = (devices[ent.device_id] ||= { id: ent.device_id, entities: {} });
+    const [domain] = ent.entity_id.split('.');
+    let role = ent.translation_key;
+    if (!role) {
+      // Fallback for registries without translation keys.
+      if (domain === 'binary_sensor') role = 'sound_active';
+      else if (domain === 'select') role = 'active_flow_filter';
+      else if (/seen/.test(ent.entity_id)) role = 'last_seen';
+      else if (/flow/.test(ent.entity_id)) role = 'last_flow';
+      else role = 'last_sound';
+    }
+    dev.entities[role] = ent.entity_id;
+  }
+  for (const dev of Object.values(devices)) {
+    const reg = hass.devices?.[dev.id];
+    dev.name = reg?.name_by_user || reg?.name || 'AllEars';
+  }
+  return Object.values(devices);
+}
 
 class AllEarsCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement('all-ears-card-editor');
+  }
+
+  static getStubConfig(hass) {
+    const dev = aeDevices(hass)[0];
+    return dev ? { device_id: dev.id } : {};
+  }
+
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._hass = null;
-    this._config = null;
-    this._initialized = false;
-    this._activeTab = 'overview';
-    this._settings = {
-      notifications: true,
-      soundAlerts: false,
-      logEvents: true,
-    };
-    this._activityLog = [];
+    this._history = [];
+    this._historyFor = null;
+    this._filter = AE_ALL_FLOWS;
+    this._lastKey = '';
   }
-
-  static getStubConfig() {
-    return {
-      type: "custom:all-ears-card",
-      device_name: "AllEars Sound Tracker",
-      location: "Living Room",
-      firmware: "1.0.0",
-      notifications: true,
-      soundAlerts: false,
-      logEvents: true
-    };
-  }
-
-  // ─── Lovelace lifecycle ──────────────────────────────────────────────────
 
   setConfig(config) {
-    this._config = {
-      device_name: 'AllEars Sound Tracker',
-      location: 'Living Room',
-      firmware: '1.0.0',
-      ...config,
-    };
-    // Derive entity IDs from optional overrides
-    const base = config.entity_base || '';
-    this._binarySensorId  = config.binary_sensor  || (base + 'binary_sensor.allears_sound_active');
-    this._soundSensorId   = config.sound_sensor   || (base + 'sensor.allears_last_detected_sound');
-    this._flowSensorId    = config.flow_sensor    || (base + 'sensor.allears_last_triggered_flow');
-    // New: select entity for flow filter (auto-registered by Android app)
-    this._selectEntityId  = config.select_entity  || (base + 'select.allears_active_flow_filter');
-    // Track which flow is selected for activity log filtering
-    this._selectedFlow = 'All Flows';
+    this._config = { show_history: true, history_hours: 24, ...(config || {}) };
+    this._lastKey = '';
+    this._historyFor = null;
+    if (this._hass) this._update(true);
   }
-
-  getCardSize() { return 6; }
 
   set hass(hass) {
-    const prev = this._hass;
     this._hass = hass;
-
-    if (!this._initialized) {
-      this._render();
-      this._initialized = true;
-    } else {
-      this._syncState(prev);
-    }
+    this._update(false);
   }
 
-  // ─── State helpers ───────────────────────────────────────────────────────
-
-  get _activeState() {
-    const obj = this._hass?.states[this._binarySensorId];
-    if (!obj) return 'empty';
-    if (obj.state === 'unavailable' || obj.state === 'unknown') return 'unavailable';
-    return obj.state === 'on' ? 'active' : 'clear';
+  connectedCallback() {
+    // Keep "x min ago" labels fresh.
+    this._tick = setInterval(() => this._update(true), 30000);
   }
 
-  _sensorVal(entityId) {
-    const obj = this._hass?.states[entityId];
-    if (!obj) return '—';
-    if (obj.state === 'unavailable' || obj.state === 'unknown') return 'Unknown';
-    return obj.state;
+  disconnectedCallback() {
+    clearInterval(this._tick);
   }
 
-  _sensorAttr(entityId, attr) {
-    const obj = this._hass?.states[entityId];
-    return obj?.attributes?.[attr] ?? null;
+  getCardSize() {
+    return this._config?.show_history ? 7 : 4;
   }
 
-  _callService(service, data = {}) {
-    this._hass.callService(DOMAIN, service, data);
+  getGridOptions() {
+    return { columns: 12, min_columns: 6, rows: 'auto' };
   }
 
-  // ─── Initial full render ─────────────────────────────────────────────────
+  // ── Data ───────────────────────────────────────────────────────────────
 
-  _render() {
-    this.shadowRoot.innerHTML = `
-      <style>${this._styles()}</style>
-      <div class="ae-root" id="root"></div>
-    `;
-    this._root = this.shadowRoot.getElementById('root');
-    this._buildDOM();
-    this._syncState(null);
-    this._attachListeners();
+  _device() {
+    const devices = aeDevices(this._hass);
+    if (this._config.device_id) return devices.find((d) => d.id === this._config.device_id) || null;
+    return devices[0] || null;
   }
 
-  _buildDOM() {
-    const state = this._activeState;
-    this._root.innerHTML = `
-      <!-- ════ HEADER ════ -->
-      <div class="ae-header">
-        <div class="ae-header-left">
-          <div class="ae-header-icon" id="hdr-icon">
-            <div class="ae-wave" id="hdr-wave">
-              <span></span><span></span><span></span><span></span>
-            </div>
-            <img class="ae-logo-img" id="hdr-logo-img" alt="AllEars" />
-          </div>
-          <div>
-            <div class="ae-title">${this._config.device_name}</div>
-            <div class="ae-subtitle" id="hdr-sub">${this._config.location} · Firmware ${this._config.firmware}</div>
-          </div>
-        </div>
-        <div class="ae-status-pill" id="hdr-pill">
-          <span class="ae-pill-dot" id="hdr-dot"></span>
-          <span id="hdr-pill-label">Listening</span>
-        </div>
-      </div>
-
-      <!-- ════ TAB BAR ════ -->
-      <div class="ae-tabs" role="tablist">
-        <button class="ae-tab active" data-tab="overview" role="tab" aria-selected="true">Overview</button>
-        <button class="ae-tab" data-tab="sensors" role="tab" aria-selected="false">Sensors</button>
-        <button class="ae-tab" data-tab="activity" role="tab" aria-selected="false">Activity</button>
-        <button class="ae-tab" data-tab="settings" role="tab" aria-selected="false">Settings</button>
-      </div>
-
-      <!-- ════ PANELS ════ -->
-      <div id="panel-overview" class="ae-panel active">
-        ${this._panelOverview()}
-      </div>
-      <div id="panel-sensors" class="ae-panel">
-        ${this._panelSensors()}
-      </div>
-      <div id="panel-activity" class="ae-panel">
-        ${this._panelActivity()}
-      </div>
-      <div id="panel-settings" class="ae-panel">
-        ${this._panelSettings()}
-      </div>
-    `;
+  _state(id) {
+    return id ? this._hass.states[id] : undefined;
   }
 
-  // ─── Panel HTML factories ────────────────────────────────────────────────
-
-  _panelOverview() {
-    return `
-      <!-- Sound Monitor card -->
-      <div class="ae-card ae-monitor-card">
-        <div class="ae-monitor-top">
-          <div>
-            <div class="ae-monitor-title">Sound Monitor</div>
-            <div class="ae-monitor-meta" id="mon-meta">${this._config.location} · Always active</div>
-          </div>
-          <div class="ae-badge">AllEars v${this._config.firmware}</div>
-        </div>
-        <div class="ae-monitor-bottom">
-          <span class="ae-label">Last detected sound</span>
-          <span class="ae-monitor-sound" id="mon-sound">Listening...</span>
-        </div>
-      </div>
-
-      <!-- Flow Filter + Sensors -->
-      <div class="ae-card">
-        <div class="ae-section-label">ACTIVE FLOW FILTER</div>
-        <div class="ae-flow-filter-wrap">
-          <ha-icon icon="mdi:waves" class="ae-flow-icon"></ha-icon>
-          <select class="ae-flow-select" id="flow-select">
-            <option value="All Flows">All Flows</option>
-          </select>
-          <span class="ae-flow-hint" id="flow-hint"></span>
-        </div>
-        <div class="ae-section-label" style="margin-top:16px">SENSORS</div>
-        <div class="ae-sensor-grid" id="ov-sensor-grid">
-          ${this._sensorTile('mdi:microphone', 'Last detected sound', this._sensorVal(this._soundSensorId), 'ov-sound-val')}
-          ${this._sensorTile('mdi:waves', 'Last triggered flow', this._sensorVal(this._flowSensorId), 'ov-flow-val')}
-          ${this._sensorTile('mdi:ear-hearing', 'Sound active', 'Clear', 'ov-active-val', true)}
-        </div>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="ae-card">
-        <div class="ae-section-label">QUICK ACTIONS</div>
-        <div class="ae-action-grid">
-          <div class="ae-action-tile" id="qa-automations">
-            <ha-icon icon="mdi:lightning-bolt" class="ae-action-icon"></ha-icon>
-            <div class="ae-action-name">Automations</div>
-            <div class="ae-action-sub">AllEars trigger</div>
-            <button class="ae-add-btn" data-action="automation">+ Add</button>
-          </div>
-          <div class="ae-action-tile" id="qa-scenes">
-            <ha-icon icon="mdi:image-multiple" class="ae-action-icon"></ha-icon>
-            <div class="ae-action-name">Scenes</div>
-            <div class="ae-action-sub">Link a scene</div>
-            <button class="ae-add-btn" data-action="scene">+ Add</button>
-          </div>
-          <div class="ae-action-tile" id="qa-scripts">
-            <ha-icon icon="mdi:script-text" class="ae-action-icon"></ha-icon>
-            <div class="ae-action-name">Scripts</div>
-            <div class="ae-action-sub">Run a script</div>
-            <button class="ae-add-btn" data-action="script">+ Add</button>
-          </div>
-        </div>
-      </div>
-    `;
+  _usable(st) {
+    return st && st.state !== 'unknown' && st.state !== 'unavailable';
   }
 
-  _sensorTile(icon, label, value, id, isActive = false) {
-    return `
-      <div class="ae-sensor-tile${isActive ? ' ae-tile-clear' : ''}" id="${id}-tile">
-        <div class="ae-sensor-icon-wrap">
-          <ha-icon icon="${icon}"></ha-icon>
-        </div>
-        <div class="ae-sensor-label">${label}</div>
-        <div class="ae-sensor-value" id="${id}">${value}</div>
-      </div>
-    `;
-  }
-
-  _panelSensors() {
-    return `
-      <!-- Detail sensor cards -->
-      <div class="ae-card ae-sensor-detail-card" id="sd-sound">
-        <div class="ae-sensor-detail-header">
-          <div class="ae-sensor-detail-icon-wrap blue">
-            <ha-icon icon="mdi:microphone"></ha-icon>
-          </div>
-          <div>
-            <div class="ae-label">SOUND DETECTED</div>
-            <div class="ae-sensor-detail-value" id="sd-sound-val">${this._sensorVal(this._soundSensorId)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="ae-card ae-sensor-detail-card" id="sd-flow">
-        <div class="ae-sensor-detail-header">
-          <div class="ae-sensor-detail-icon-wrap amber">
-            <ha-icon icon="mdi:waves"></ha-icon>
-          </div>
-          <div>
-            <div class="ae-label">FLOW TRIGGERED</div>
-            <div class="ae-sensor-detail-value" id="sd-flow-val">${this._sensorVal(this._flowSensorId)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="ae-card ae-sensor-detail-card">
-        <div class="ae-sensor-detail-header">
-          <div class="ae-sensor-detail-icon-wrap green" id="sd-active-wrap">
-            <ha-icon icon="mdi:ear-hearing"></ha-icon>
-          </div>
-          <div>
-            <div class="ae-label">SOUND ACTIVE</div>
-            <div class="ae-sensor-detail-value" id="sd-active-val">Clear</div>
-          </div>
-        </div>
-        <div class="ae-sensor-attrs">
-          <div class="ae-attr-row"><span class="ae-label">ENTITY</span><span>${this._binarySensorId}</span></div>
-        </div>
-      </div>
-    `;
-  }
-
-  _panelActivity() {
-    return `
-      <!-- Device card -->
-      <div class="ae-card">
-        <div class="ae-section-label">DEVICE</div>
-        <div class="ae-device-row">
-          <div class="ae-device-icon-wrap">
-            <ha-icon icon="mdi:cellphone-sound"></ha-icon>
-          </div>
-          <div class="ae-device-info">
-            <div class="ae-device-name">${this._config.device_name}</div>
-            <div class="ae-device-sub">by AllEars</div>
-          </div>
-          <ha-icon icon="mdi:chevron-right" class="ae-chevron"></ha-icon>
-        </div>
-        <div class="ae-attr-row"><span class="ae-label">FIRMWARE</span><span class="ae-row-right"><b>${this._config.firmware}</b> <span class="ae-badge-sm">Up to date</span></span></div>
-        <div class="ae-attr-row"><span class="ae-label">INTEGRATION</span><span>AllEars HACS</span></div>
-        <div class="ae-attr-row"><span class="ae-label">LOCATION</span><span>${this._config.location}</span></div>
-        <div class="ae-attr-row"><span class="ae-label">WEBHOOK</span><span class="ae-mono ae-clip" id="dev-webhook-id">—</span></div>
-      </div>
-
-      <!-- Activity log card -->
-      <div class="ae-card">
-        <div class="ae-section-label">ACTIVITY</div>
-        <div id="act-list" class="ae-act-list">
-          <div class="ae-empty-state">
-            <ha-icon icon="mdi:ear-hearing" class="ae-empty-icon"></ha-icon>
-            <div class="ae-empty-copy">No activity recorded yet</div>
-          </div>
-        </div>
-        <button class="ae-btn ae-btn-outline ae-btn-full" id="btn-simulate">
-          <ha-icon icon="mdi:microphone-outline"></ha-icon>
-          Simulate sound event
-        </button>
-        <button class="ae-btn ae-btn-ghost ae-btn-full" id="btn-clear-history" style="margin-top:8px">
-          <ha-icon icon="mdi:trash-can-outline"></ha-icon>
-          Clear history
-        </button>
-      </div>
-    `;
-  }
-
-  _panelSettings() {
-    return `
-      <!-- Connection Settings -->
-      <div class="ae-card">
-        <div class="ae-section-label">CONNECTION</div>
-        <div class="ae-attr-row ae-attr-row--pad">
-          <div>
-            <div class="ae-setting-label">Webhook URL</div>
-            <div class="ae-setting-sub">Used by the AllEars Android app</div>
-          </div>
-        </div>
-        <div class="ae-webhook-url-row">
-          <input class="ae-input" id="wh-url-input" readonly placeholder="Loading…" />
-          <button class="ae-icon-btn" id="btn-copy-wh" title="Copy URL"><ha-icon icon="mdi:content-copy"></ha-icon></button>
-        </div>
-        <div class="ae-attr-row ae-attr-row--pad" style="margin-top:16px">
-          <div>
-            <div class="ae-setting-label">Device Name</div>
-            <div class="ae-setting-sub">Label shown in Home Assistant</div>
-          </div>
-        </div>
-        <div class="ae-webhook-url-row">
-          <input class="ae-input" id="device-name-input" value="${this._config.device_name}" />
-          <button class="ae-icon-btn" id="btn-save-name" title="Save"><ha-icon icon="mdi:check"></ha-icon></button>
-        </div>
-      </div>
-
-      <!-- Notifications Settings -->
-      <div class="ae-card">
-        <div class="ae-section-label">NOTIFICATIONS</div>
-        <div class="ae-setting-row" id="set-notif">
-          <div>
-            <div class="ae-setting-label">Enable notifications</div>
-            <div class="ae-setting-sub">Receive alerts when a flow triggers</div>
-          </div>
-          <div class="ae-toggle ${this._settings.notifications ? 'on' : ''}" data-key="notifications" role="switch" tabindex="0"></div>
-        </div>
-        <div class="ae-setting-row" id="set-alerts">
-          <div>
-            <div class="ae-setting-label">Sound active alerts</div>
-            <div class="ae-setting-sub">Alert while sound detection is active</div>
-          </div>
-          <div class="ae-toggle ${this._settings.soundAlerts ? 'on' : ''}" data-key="soundAlerts" role="switch" tabindex="0"></div>
-        </div>
-        <div class="ae-setting-row" id="set-log">
-          <div>
-            <div class="ae-setting-label">Log all events</div>
-            <div class="ae-setting-sub">Keep an event history in the Activity tab</div>
-          </div>
-          <div class="ae-toggle ${this._settings.logEvents ? 'on' : ''}" data-key="logEvents" role="switch" tabindex="0"></div>
-        </div>
-      </div>
-
-      <!-- Diagnostics -->
-      <div class="ae-card">
-        <div class="ae-section-label">DIAGNOSTICS</div>
-        <button class="ae-btn ae-btn-outline ae-btn-full" id="btn-test-wh">
-          <ha-icon icon="mdi:webhook"></ha-icon>
-          Send test webhook event
-        </button>
-        <button class="ae-btn ae-btn-danger ae-btn-full" id="btn-factory-reset" style="margin-top:8px">
-          <ha-icon icon="mdi:delete-forever"></ha-icon>
-          Clear all data
-        </button>
-      </div>
-    `;
-  }
-
-  // ─── State Sync (runs on every hass update) ──────────────────────────────
-
-  _getFilteredLatestSound() {
-    if (this._selectedFlow === 'All Flows') {
-      return this._sensorVal(this._soundSensorId);
-    }
-    const matched = this._activityLog.find(e => e.flow === this._selectedFlow);
-    return matched ? matched.sound : 'Waiting...';
-  }
-
-  _getFilteredLatestFlow() {
-    if (this._selectedFlow === 'All Flows') {
-      return this._sensorVal(this._flowSensorId);
-    }
-    const matched = this._activityLog.find(e => e.flow === this._selectedFlow);
-    return matched ? matched.flow : 'Waiting...';
-  }
-
-  _syncState(prev) {
-    const root = this._root;
-    const state = this._activeState;
-
-    // ── Header pill ──
-    const pill = root.querySelector('#hdr-pill');
-    const dot = root.querySelector('#hdr-dot');
-    const pillLabel = root.querySelector('#hdr-pill-label');
-    const hdrIcon = root.querySelector('#hdr-icon');
-    const hdrHaIcon = root.querySelector('#hdr-ha-icon');
-
-    if (pill) {
-      pill.className = 'ae-status-pill';
-      if (state === 'active') { pill.classList.add('ae-pill-active'); pillLabel.textContent = 'Active'; }
-      else if (state === 'unavailable') { pill.classList.add('ae-pill-unavail'); pillLabel.textContent = 'Unavailable'; }
-      else if (state === 'empty') { pill.classList.add('ae-pill-unavail'); pillLabel.textContent = 'Not found'; }
-      else { pillLabel.textContent = 'Listening'; }
-
-      hdrIcon.className = 'ae-header-icon' + (state === 'active' ? ' active' : '');
-      const hdrLogoImg = root.querySelector('#hdr-logo-img');
-      if (hdrLogoImg && !hdrLogoImg.src) {
-         try {
-           hdrLogoImg.src = new URL('./logo.png', import.meta.url).href;
-         } catch(e) {
-           hdrLogoImg.src = '/all-ears-card/logo.png';
-         }
+  async _loadHistory(dev) {
+    const id = dev.entities.last_sound;
+    if (!id || !this._config.show_history) return;
+    const key = `${id}|${this._config.history_hours}`;
+    if (this._historyFor === key) return;
+    this._historyFor = key;
+    const end = new Date();
+    const start = new Date(end.getTime() - Number(this._config.history_hours || 24) * 3600 * 1000);
+    try {
+      const res = await this._hass.callWS({
+        type: 'history/history_during_period',
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        entity_ids: [id],
+        minimal_response: false,
+        no_attributes: false,
+        significant_changes_only: false,
+      });
+      const rows = [];
+      let attrs = {};
+      for (const r of res?.[id] || []) {
+        if (r.a) attrs = r.a;
+        if (!r.s || r.s === 'unknown' || r.s === 'unavailable') continue;
+        rows.push(this._row(r.s, attrs, (r.lu || r.lc || 0) * 1000));
       }
-      if (hdrLogoImg) {
-         hdrLogoImg.style.opacity = state === 'unavailable' ? '0.5' : '1';
-         hdrLogoImg.style.filter = state === 'unavailable' ? 'grayscale(100%)' : 'none';
-      }
+      this._history = this._dedupe(rows).slice(0, 50);
+    } catch (err) {
+      // Non-admin users or recorder disabled: keep the live list only.
+      this._history = this._history || [];
     }
+    this._lastKey = '';
+    this._update(true);
+  }
 
-    // ── Monitor card ──
-    const monSound = root.querySelector('#mon-sound');
-    if (monSound) {
-      const sv = this._sensorVal(this._soundSensorId);
-      monSound.textContent = state === 'active' ? sv : state === 'unavailable' ? 'Unavailable' : 'Listening...';
-    }
+  _row(sound, attrs, fallbackMs) {
+    const t = Date.parse(attrs.timestamp || attrs.last_updated || '') || fallbackMs;
+    return {
+      sound,
+      flow: attrs.flow_name || '',
+      confidence: typeof attrs.confidence === 'number' ? attrs.confidence : null,
+      t,
+    };
+  }
 
-    // ── Overview sensor tiles ──
-    this._setText('#ov-sound-val', this._getFilteredLatestSound());
-    this._setText('#ov-flow-val', this._getFilteredLatestFlow());
+  _dedupe(rows) {
+    const seen = new Set();
+    return rows
+      .sort((a, b) => b.t - a.t)
+      .filter((r) => {
+        const k = `${r.t}|${r.sound}|${r.flow}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+  }
 
-    const activeTile = root.querySelector('#ov-active-val-tile');
-    const activeVal = root.querySelector('#ov-active-val');
-    if (activeVal) {
-      const isOn = state === 'active';
-      activeVal.textContent = isOn ? 'Active' : 'Clear';
-      if (activeTile) {
-        activeTile.className = 'ae-sensor-tile ' + (isOn ? 'ae-tile-active' : 'ae-tile-clear');
-      }
-    }
-
-    // ── Sensors panel ──
-    this._setText('#sd-sound-val', this._sensorVal(this._soundSensorId));
-    this._setText('#sd-flow-val', this._sensorVal(this._flowSensorId));
-    this._setText('#sd-active-val', state === 'active' ? 'Active' : state === 'unavailable' ? 'Unavailable' : 'Clear');
-
-    const sdActiveWrap = root.querySelector('#sd-active-wrap');
-    if (sdActiveWrap) {
-      sdActiveWrap.className = 'ae-sensor-detail-icon-wrap ' + (state === 'active' ? 'amber' : 'green');
-    }
-
-    // ── Activity: webhook entity id ──
-    this._populateWebhookId();
-
-    // ── Flow filter dropdown sync ──
-    this._syncFlowDropdown();
-
-    // ── Append to activity log if state changed to active ──
-    if (prev && this._activeState === 'active') {
-      const prevBin = prev.states[this._binarySensorId];
-      const curBin = this._hass.states[this._binarySensorId];
-      if (prevBin && curBin && prevBin.state !== 'on' && curBin.state === 'on') {
-        const flowVal = this._sensorVal(this._flowSensorId);
-        const soundVal = this._sensorVal(this._soundSensorId);
-        this._addActivityEntry(soundVal, flowVal);
-      }
+  _trackLive(soundSt) {
+    if (!this._usable(soundSt)) return;
+    const row = this._row(soundSt.state, soundSt.attributes || {}, Date.parse(soundSt.last_updated));
+    const head = this._history[0];
+    if (!head || head.t !== row.t || head.sound !== row.sound) {
+      this._history = this._dedupe([row, ...this._history]).slice(0, 50);
     }
   }
 
-  _syncFlowDropdown() {
-    const selectEl = this._root?.querySelector('#flow-select');
-    if (!selectEl) return;
+  // ── Render ─────────────────────────────────────────────────────────────
 
-    const entity = this._hass?.states[this._selectEntityId];
-    const options = entity?.attributes?.options || ['All Flows'];
-    const current = entity?.state || 'All Flows';
-
-    // Rebuild options only if they have changed (avoids flickering)
-    const currentOpts = [...selectEl.options].map(o => o.value);
-    const same = options.length === currentOpts.length &&
-                 options.every((o, i) => o === currentOpts[i]);
-    if (!same) {
-      selectEl.innerHTML = options
-        .map(o => `<option value="${o}"${o === current ? ' selected' : ''}>${o}</option>`)
-        .join('');
-    } else if (selectEl.value !== current) {
-      selectEl.value = current;
-    }
-
-    this._selectedFlow = current;
-
-    const hint = this._root?.querySelector('#flow-hint');
-    if (hint) {
-      hint.textContent = current === 'All Flows'
-        ? 'Showing all events'
-        : `Filtering: ${current}`;
-    }
-  }
-
-  _populateWebhookId() {
-    const root = this._root;
-    // Look through all hass entities to find a config entry for allears
-    const allEarsConfig = Object.values(this._hass?.states || {}).find(e =>
-      e.entity_id.startsWith('binary_sensor.allears') || e.entity_id.startsWith('sensor.allears')
-    );
-    const ha_url = this._hass?.config?.external_url || this._hass?.config?.internal_url || window.location.origin;
-    const webhookId = allEarsConfig?.attributes?.webhook_id || '<webhook-id>';
-    const fullUrl = `${ha_url}/api/webhook/${webhookId}`;
-
-    const whInput = root.querySelector('#wh-url-input');
-    if (whInput) whInput.value = fullUrl;
-
-    const webhookEl = root.querySelector('#dev-webhook-id');
-    if (webhookEl) webhookEl.textContent = webhookId;
-  }
-
-  _addActivityEntry(sound, flow) {
-    if (!this._settings.logEvents) return;
-    const now = new Date();
-    this._activityLog.unshift({ sound, flow, time: now });
-    if (this._activityLog.length > 50) this._activityLog.pop();
-    this._renderActivityList();
-  }
-
-  _renderActivityList() {
-    const list = this._root.querySelector('#act-list');
-    if (!list) return;
-
-    const displayLog = this._selectedFlow === 'All Flows' 
-      ? this._activityLog 
-      : this._activityLog.filter(e => e.flow === this._selectedFlow);
-
-    if (displayLog.length === 0) {
-      list.innerHTML = `
-        <div class="ae-empty-state">
-          <ha-icon icon="mdi:ear-hearing" class="ae-empty-icon"></ha-icon>
-          <div class="ae-empty-copy">No activity recorded yet</div>
-        </div>`;
+  _update(force) {
+    if (!this._hass || !this._config) return;
+    const dev = this._device();
+    if (!dev) {
+      this._renderMissing();
       return;
     }
-    list.innerHTML = displayLog.map(e => `
-      <div class="ae-act-row">
-        <div class="ae-act-icon-wrap"><ha-icon icon="mdi:microphone"></ha-icon></div>
-        <div class="ae-act-body">
-          <div class="ae-act-sound">${e.sound}</div>
-          <div class="ae-act-meta">${e.flow} · ${this._fmtTime(e.time)}</div>
+    const e = dev.entities;
+    const sound = this._state(e.last_sound);
+    const active = this._state(e.sound_active);
+    const seen = this._state(e.last_seen);
+    const select = this._state(e.active_flow_filter);
+    const key = [dev.name, sound?.last_updated, active?.state, seen?.state, select?.state,
+      (select?.attributes?.options || []).join('\u0001'), this._history.length].join('|');
+    if (!force && key === this._lastKey) return;
+    this._lastKey = key;
+
+    this._trackLive(sound);
+    this._loadHistory(dev);
+    this._render(dev, { sound, active, seen, select });
+  }
+
+  _renderMissing() {
+    if (this._lastKey === 'missing') return;
+    this._lastKey = 'missing';
+    const admin = this._hass.user?.is_admin;
+    this.shadowRoot.innerHTML = `<style>${AE_STYLES}</style>
+      <ha-card><div class="wrap">
+        ${this._header('AllEars', 'off', 'Not set up')}
+        <div class="setup">
+          <p><b>No AllEars phone found.</b></p>
+          <p class="muted">Add the AllEars integration, then paste its webhook URL into a flow's <b>Trigger Webhook</b> action in the AllEars app.</p>
+          ${admin ? '<button class="btn primary" data-nav="/config/integrations/integration/allears">Open AllEars integration</button>' : ''}
         </div>
-      </div>
-    `).join('');
+      </div></ha-card>`;
+    this._bind();
   }
 
-  // ─── Event listeners ─────────────────────────────────────────────────────
-
-  _attachListeners() {
-    const root = this._root;
-
-    // Tabs
-    root.addEventListener('click', e => {
-      const tab = e.target.closest('.ae-tab');
-      if (tab) { this._switchTab(tab.dataset.tab); return; }
-
-      // Simulate / Test webhook
-      if (e.target.closest('#btn-simulate') || e.target.closest('#btn-test-wh')) {
-        this._callService('test_webhook');
-        this._addActivityEntry('Test Sound', 'Test Flow');
-        this._showToast('Test event fired ✓');
-        return;
-      }
-
-      // Clear history
-      if (e.target.closest('#btn-clear-history') || e.target.closest('#btn-factory-reset')) {
-        this._callService('clear_history');
-        this._activityLog = [];
-        this._renderActivityList();
-        this._showToast('History cleared');
-        return;
-      }
-
-      // + Add action shortcuts — deep-link into HA with allears pre-filled
-      const addBtn = e.target.closest('.ae-add-btn');
-      if (addBtn && this._hass) {
-        const action = addBtn.dataset.action;
-        if (action === 'automation') {
-          // Pre-fill the automation editor with the allears_sound_detected event trigger
-          window.history.pushState(
-            null, '',
-            '/config/automation/new?trigger_type=event&event_type=allears_sound_detected'
-          );
-          window.dispatchEvent(new PopStateEvent('popstate'));
-        } else {
-          window.history.pushState(null, '', `/${action}s/new`);
-          window.dispatchEvent(new PopStateEvent('popstate'));
-        }
-        return;
-      }
-
-      // Flow filter dropdown change (native select fires change, not click)
-      // — handled in change listener below
-
-      // Copy webhook URL
-      if (e.target.closest('#btn-copy-wh')) {
-        const val = root.querySelector('#wh-url-input')?.value;
-        if (val) { navigator.clipboard.writeText(val); this._showToast('Copied to clipboard ✓'); }
-        return;
-      }
-
-      // Save device name
-      if (e.target.closest('#btn-save-name')) {
-        const val = root.querySelector('#device-name-input')?.value?.trim();
-        if (val) { this._config.device_name = val; this._showToast('Saved'); }
-        return;
-      }
-
-      // Toggle switches
-      const toggle = e.target.closest('.ae-toggle');
-      if (toggle) {
-        const key = toggle.dataset.key;
-        this._settings[key] = !this._settings[key];
-        toggle.classList.toggle('on', this._settings[key]);
-        return;
-      }
-    });
-
-    // Flow filter select — change event
-    root.addEventListener('change', e => {
-      const sel = e.target.closest('#flow-select');
-      if (sel && this._hass) {
-        const chosen = sel.value;
-        this._selectedFlow = chosen;
-        // Write back to the HA select entity
-        this._hass.callService('select', 'select_option', {
-          entity_id: this._selectEntityId,
-          option: chosen,
-        });
-        const hint = root.querySelector('#flow-hint');
-        if (hint) hint.textContent = chosen === 'All Flows' ? 'Showing all events' : `Filtering: ${chosen}`;
-        this._setText('#ov-sound-val', this._getFilteredLatestSound());
-        this._setText('#ov-flow-val', this._getFilteredLatestFlow());
-        this._renderActivityList();
-      }
-    });
-
-    // Keyboard accessibility for toggles
-    root.addEventListener('keydown', e => {
-      if ((e.key === ' ' || e.key === 'Enter') && e.target.classList.contains('ae-toggle')) {
-        e.preventDefault();
-        e.target.click();
-      }
-    });
+  _header(title, mode, status) {
+    return `<div class="head">
+      <div class="ear ${mode}"><span class="ring"></span><span class="ring r2"></span><img class="logo" src="${AE_LOGO_URL}" alt="AllEars"></div>
+      <div class="ttl"><div class="name">${aeEsc(title)}</div><div class="status ${mode}">${aeEsc(status)}</div></div>
+    </div>`;
   }
 
-  _switchTab(tab) {
-    this._activeTab = tab;
-    const root = this._root;
-    root.querySelectorAll('.ae-tab').forEach(t => {
-      const active = t.dataset.tab === tab;
-      t.classList.toggle('active', active);
-      t.setAttribute('aria-selected', active);
-    });
-    root.querySelectorAll('.ae-panel').forEach(p => {
-      p.classList.toggle('active', p.id === `panel-${tab}`);
-    });
-    // Refresh webhook display when switching to activity/settings
-    if (tab === 'activity' || tab === 'settings') {
-      this._populateWebhookId();
+  _render(dev, { sound, active, seen, select }) {
+    const admin = this._hass.user?.is_admin;
+    const now = Date.now();
+    const isActive = active?.state === 'on';
+    const unavailable = active?.state === 'unavailable';
+    const seenMs = this._usable(seen) ? Date.parse(seen.state) : null;
+    const hasSound = this._usable(sound);
+    const flows = (select?.attributes?.options || []).filter((o) => o !== AE_ALL_FLOWS);
+    const connected = !!seenMs || hasSound || flows.length > 0;
+
+    let mode = 'idle';
+    let status = seenMs ? `Connected · phone seen ${aeAgo(seenMs, now)}` : 'Waiting for the phone';
+    if (unavailable) { mode = 'off'; status = 'Unavailable'; }
+    else if (isActive) { mode = 'active'; status = 'Sound detected now'; }
+    else if (!connected) { mode = 'off'; }
+
+    const title = this._config.title || dev.name;
+    const a = sound?.attributes || {};
+    const heardMs = hasSound ? (Date.parse(a.timestamp || a.last_updated || '') || Date.parse(sound.last_updated)) : null;
+    const conf = typeof a.confidence === 'number' ? Math.round(a.confidence * 100) : null;
+
+    const hero = hasSound
+      ? `<div class="hero ${isActive ? 'on' : ''}" data-entity="${aeEsc(dev.entities.last_sound)}" role="button" tabindex="0">
+          <div class="lbl">Last sound</div>
+          <div class="sound">${aeEsc(sound.state)}</div>
+          <div class="meta">
+            ${a.flow_name ? `<span class="chip flow"><ha-icon icon="mdi:waves"></ha-icon>${aeEsc(a.flow_name)}</span>` : ''}
+            ${conf != null ? `<span class="chip"><span class="bar"><i style="width:${conf}%"></i></span>${conf}%</span>` : ''}
+            ${heardMs ? `<span class="chip"><ha-icon icon="mdi:clock-outline"></ha-icon>${aeAgo(heardMs, now)}</span>` : ''}
+          </div>
+        </div>`
+      : `<div class="hero empty"><div class="lbl">Last sound</div><div class="sound muted">Nothing heard yet</div></div>`;
+
+    const setup = !connected
+      ? `<div class="setup">
+          <p><b>Connect the AllEars app</b></p>
+          <ol>
+            <li>Open <b>Configure</b> on the AllEars integration and copy the webhook URL.</li>
+            <li>In AllEars, open a flow, add the <b>Trigger Webhook</b> action and paste it.</li>
+            <li>In AllEars Settings, tap <b>Sync Flows with Home Assistant</b>.</li>
+          </ol>
+          ${admin ? '<button class="btn" data-nav="/config/integrations/integration/allears">Open integration</button>' : ''}
+        </div>`
+      : '';
+
+    const counts = {};
+    for (const r of this._history) counts[r.flow] = (counts[r.flow] || 0) + 1;
+    if (this._filter !== AE_ALL_FLOWS && !flows.includes(this._filter)) this._filter = AE_ALL_FLOWS;
+    const flowChips = flows.length
+      ? `<div class="sec"><div class="sec-h">Flows <span class="muted">${flows.length}</span></div>
+          <div class="flows">
+            ${[AE_ALL_FLOWS, ...flows].map((f) => `<button class="fchip ${f === this._filter ? 'sel' : ''}" data-flow="${aeEsc(f)}">${aeEsc(f)}${f !== AE_ALL_FLOWS && counts[f] ? `<span class="n">${counts[f]}</span>` : ''}</button>`).join('')}
+          </div></div>`
+      : '';
+
+    let history = '';
+    if (this._config.show_history) {
+      const rows = this._history.filter((r) => this._filter === AE_ALL_FLOWS || r.flow === this._filter).slice(0, 8);
+      history = `<div class="sec"><div class="sec-h">Recent <span class="muted">last ${aeEsc(this._config.history_hours)} h</span></div>
+        ${rows.length
+          ? `<ul class="list">${rows.map((r) => `<li>
+              <ha-icon icon="mdi:microphone"></ha-icon>
+              <div class="li-main"><div class="li-s">${aeEsc(r.sound)}</div><div class="li-f muted">${aeEsc(r.flow || '—')}${r.confidence != null ? ` · ${Math.round(r.confidence * 100)}%` : ''}</div></div>
+              <div class="li-t muted">${aeAgo(r.t, now)}</div></li>`).join('')}</ul>`
+          : `<div class="muted small">No sounds ${this._filter === AE_ALL_FLOWS ? '' : `from ${aeEsc(this._filter)} `}in this period.</div>`}
+      </div>`;
     }
-    if (tab === 'activity') {
-      this._renderActivityList();
-    }
+
+    const actions = admin
+      ? `<div class="actions">
+          <button class="btn" data-act="test"><ha-icon icon="mdi:play-circle-outline"></ha-icon>Send test sound</button>
+          <button class="btn" data-nav="/config/devices/device/${aeEsc(dev.id)}"><ha-icon icon="mdi:robot-outline"></ha-icon>Automate</button>
+          <button class="btn ghost" data-act="clear" title="Forget the last sound"><ha-icon icon="mdi:eraser"></ha-icon></button>
+        </div>`
+      : '';
+
+    this.shadowRoot.innerHTML = `<style>${AE_STYLES}</style>
+      <ha-card><div class="wrap">
+        ${this._header(title, mode, status)}
+        ${hero}
+        ${setup}
+        ${flowChips}
+        ${history}
+        ${actions}
+      </div></ha-card>`;
+    this._bind(dev);
   }
 
-  _showToast(msg) {
-    const existing = this.shadowRoot.querySelector('.ae-toast');
-    if (existing) existing.remove();
-    const toast = document.createElement('div');
-    toast.className = 'ae-toast';
-    toast.textContent = msg;
-    this.shadowRoot.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('ae-toast-in'));
-    setTimeout(() => {
-      toast.classList.remove('ae-toast-in');
-      setTimeout(() => toast.remove(), 300);
-    }, 2200);
-  }
-
-  // ─── Helpers ─────────────────────────────────────────────────────────────
-
-  _setText(selector, value) {
-    const el = this._root?.querySelector(selector);
-    if (el) el.textContent = value;
-  }
-
-  _fmtTime(ts) {
-    try {
-      const d = ts instanceof Date ? ts : new Date(ts);
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch { return '—'; }
-  }
-
-  // ─── Styles ───────────────────────────────────────────────────────────────
-
-  _styles() {
-    return `
-      :host {
-        display: block;
-        font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        color: var(--primary-text-color);
-      }
-
-      *, *::before, *::after { box-sizing: border-box; }
-
-      /* ── Root wrapper ── */
-      .ae-root {
-        background: var(--primary-background-color, #111318);
-        border-radius: var(--ha-card-border-radius, 16px);
-        overflow: hidden;
-        border: var(--ha-card-border-width, 1px) solid var(--ha-card-border-color, var(--divider-color, rgba(255,255,255,0.08)));
-        box-shadow: var(--ha-card-box-shadow, none);
-      }
-
-      /* ── Cards inside ── */
-      .ae-card {
-        background: var(--card-background-color, #1c1e26);
-        border-radius: 16px;
-        border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(255,255,255,0.06)));
-        box-shadow: 0 2px 12px rgba(0,0,0,0.02);
-        padding: 24px;
-        margin: 0 24px 24px;
-      }
-
-      /* ── Header ── */
-      .ae-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 24px 24px 16px;
-        gap: 16px;
-      }
-      .ae-header-left { display: flex; align-items: center; gap: 16px; }
-      .ae-title { font-size: 22px; font-weight: 500; color: var(--primary-text-color); letter-spacing: -0.2px; }
-      .ae-subtitle { font-size: 14px; color: var(--secondary-text-color); margin-top: 4px; }
-
-      .ae-header-icon {
-        width: 44px; height: 44px; border-radius: 50%;
-        background: var(--secondary-background-color, rgba(120,120,120,0.15));
-        display: flex; align-items: center; justify-content: center;
-        color: var(--primary-text-color);
-        transition: background 0.3s, color 0.3s;
-        flex-shrink: 0;
-      }
-      .ae-header-icon.active { background: var(--warning-color); color: #fff; }
-      .ae-header-icon.active .ae-wave { display: flex; }
-      .ae-header-icon.active .ae-logo-img { display: none; }
-      .ae-logo-img { width: 28px; height: 28px; object-fit: contain; }
-
-      .ae-wave {
-        display: none; align-items: center; gap: 3px; height: 22px;
-      }
-      .ae-wave span {
-        display: block; width: 3px; border-radius: 2px;
-        background: currentColor;
-        animation: ae-pulse 1s ease-in-out infinite alternate;
-      }
-      .ae-wave span:nth-child(1) { height: 40%; animation-delay: 0s; }
-      .ae-wave span:nth-child(2) { height: 100%; animation-delay: 0.2s; }
-      .ae-wave span:nth-child(3) { height: 60%; animation-delay: 0.1s; }
-      .ae-wave span:nth-child(4) { height: 80%; animation-delay: 0.3s; }
-      @keyframes ae-pulse {
-        from { transform: scaleY(0.3); }
-        to   { transform: scaleY(1); }
-      }
-
-      /* ── Status pill ── */
-      .ae-status-pill {
-        display: flex; align-items: center; gap: 8px;
-        padding: 6px 14px; border-radius: 999px;
-        font-size: 13px; font-weight: 500;
-        background: rgba(3,169,244,0.15);
-        color: var(--info-color, #03a9f4);
-        border: 1px solid rgba(3,169,244,0.25);
-        transition: background 0.3s, color 0.3s, border-color 0.3s;
-        white-space: nowrap;
-      }
-      .ae-pill-dot {
-        width: 8px; height: 8px; border-radius: 50%;
-        background: currentColor;
-        animation: ae-blink 2s ease-in-out infinite;
-      }
-      .ae-status-pill.ae-pill-active {
-        background: rgba(255,152,0,0.15); color: var(--warning-color, #ff9800);
-        border-color: rgba(255,152,0,0.3);
-      }
-      .ae-status-pill.ae-pill-unavail {
-        background: rgba(128,128,128,0.1); color: var(--disabled-text-color, #888);
-        border-color: rgba(128,128,128,0.15);
-      }
-      @keyframes ae-blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
-      }
-
-      /* ── Tab bar ── */
-      .ae-tabs {
-        display: flex; gap: 8px;
-        padding: 0 24px 16px;
-        border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.06));
-        overflow-x: auto;
-        scrollbar-width: none;
-      }
-      .ae-tabs::-webkit-scrollbar { display: none; }
-
-      .ae-tab {
-        appearance: none; border: none; background: none; cursor: pointer;
-        font: 500 14px/1 'Roboto', sans-serif;
-        letter-spacing: 0.3px;
-        color: var(--secondary-text-color);
-        padding: 10px 16px;
-        border-radius: 8px;
-        min-height: 44px;
-        transition: background 0.2s, color 0.2s;
-        white-space: nowrap;
-      }
-      .ae-tab:hover { background: var(--secondary-background-color, rgba(120,120,120,0.1)); color: var(--primary-text-color); }
-      .ae-tab.active { background: var(--secondary-background-color, rgba(120,120,120,0.15)); color: var(--primary-text-color); }
-
-      /* ── Panels ── */
-      .ae-panel { display: none; padding-top: 20px; }
-      .ae-panel.active { display: block; }
-
-      /* ── Section label ── */
-      .ae-section-label {
-        font-size: 11px; font-weight: 500;
-        letter-spacing: 0.8px; text-transform: uppercase;
-        color: var(--secondary-text-color);
-        margin-bottom: 12px;
-      }
-
-      /* ── Monitor card ── */
-      .ae-monitor-card { position: relative; min-height: 160px; }
-      .ae-monitor-top {
-        display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
-        margin-bottom: 40px;
-      }
-      .ae-monitor-title { font-size: 22px; font-weight: 500; }
-      .ae-monitor-meta  { font-size: 14px; color: var(--secondary-text-color); margin-top: 4px; }
-      .ae-monitor-bottom {
-        display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-      }
-      .ae-label {
-        font-size: 12px; font-weight: 600; text-transform: uppercase;
-        letter-spacing: 0.8px; color: var(--secondary-text-color);
-      }
-      .ae-monitor-sound { font-size: 26px; font-weight: 400; color: var(--primary-text-color); }
-
-      /* ── Badge ── */
-      .ae-badge {
-        font-size: 11px; font-weight: 500;
-        background: var(--secondary-background-color, rgba(120,120,120,0.15));
-        color: var(--secondary-text-color);
-        padding: 4px 10px; border-radius: 999px;
-        border: 1px solid var(--divider-color);
-        white-space: nowrap;
-      }
-      .ae-badge-sm {
-        font-size: 11px; font-weight: 500;
-        background: rgba(76,175,80,0.15);
-        color: var(--success-color, #4caf50);
-        padding: 2px 8px; border-radius: 999px;
-        border: 1px solid rgba(76,175,80,0.25);
-      }
-
-      /* ── Sensor grid (overview) ── */
-      .ae-sensor-grid {
-        display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-      }
-      @media (max-width: 400px) {
-        .ae-sensor-grid { grid-template-columns: 1fr; }
-      }
-      .ae-sensor-tile {
-        background: var(--secondary-background-color, rgba(120,120,120,0.08));
-        border-radius: 10px; padding: 12px;
-        border-left: 4px solid var(--divider-color);
-        display: flex; flex-direction: column; gap: 6px;
-        transition: border-left-color 0.3s;
-        min-height: 44px;
-      }
-      .ae-sensor-tile.ae-tile-clear  { border-left-color: var(--success-color, #4caf50); }
-      .ae-sensor-tile.ae-tile-active { border-left-color: var(--warning-color, #ff9800); }
-
-      .ae-sensor-icon-wrap {
-        width: 32px; height: 32px; border-radius: 8px;
-        background: rgba(3,169,244,0.12);
-        display: flex; align-items: center; justify-content: center;
-        color: var(--info-color, #03a9f4);
-        --mdc-icon-size: 18px;
-      }
-      .ae-sensor-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; color: var(--secondary-text-color); }
-      .ae-sensor-value { font-size: 16px; font-weight: 400; color: var(--primary-text-color); }
-
-      /* ── Quick Actions grid ── */
-      .ae-action-grid {
-        display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-      }
-      @media (max-width: 400px) {
-        .ae-action-grid { grid-template-columns: 1fr; }
-      }
-      .ae-action-tile {
-        background: var(--secondary-background-color, rgba(120,120,120,0.08));
-        border-radius: 10px; padding: 12px;
-        display: flex; flex-direction: column; align-items: center; gap: 6px;
-        text-align: center; min-height: 44px;
-        border: 1px solid var(--divider-color);
-      }
-      .ae-action-icon { color: var(--warning-color, #ff9800); --mdc-icon-size: 24px; }
-      .ae-action-name { font-size: 13px; font-weight: 500; }
-      .ae-action-sub  { font-size: 11px; color: var(--secondary-text-color); }
-      .ae-add-btn {
-        appearance: none; background: none; border: none;
-        color: var(--primary-color, #03a9f4);
-        font-size: 12px; font-weight: 500; cursor: pointer;
-        padding: 4px 8px; border-radius: 6px;
-        min-height: 44px; width: 100%;
-        transition: background 0.2s;
-      }
-      .ae-add-btn:hover { background: rgba(3,169,244,0.1); }
-
-      /* ── Flow filter dropdown ── */
-      .ae-flow-filter-wrap {
-        display: flex; align-items: center; gap: 10px;
-        background: var(--secondary-background-color, rgba(120,120,120,0.08));
-        border: 1px solid var(--divider-color, rgba(255,255,255,0.08));
-        border-radius: 10px; padding: 10px 14px;
-      }
-      .ae-flow-icon { color: var(--info-color, #03a9f4); --mdc-icon-size: 20px; flex-shrink: 0; }
-      .ae-flow-select {
-        flex: 1; appearance: none;
-        background: transparent;
-        border: none; outline: none;
-        color: var(--primary-text-color);
-        font: 500 14px/1 'Roboto', sans-serif;
-        cursor: pointer;
-      }
-      .ae-flow-select option { background: var(--card-background-color, #1c1e26); color: var(--primary-text-color); }
-      .ae-flow-hint { font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; }
-
-      /* ── Sensor detail cards ── */
-      .ae-sensor-detail-card { }
-      .ae-sensor-detail-header {
-        display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
-      }
-      .ae-sensor-detail-icon-wrap {
-        width: 44px; height: 44px; border-radius: 12px;
-        display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0; --mdc-icon-size: 22px;
-        transition: background 0.3s;
-      }
-      .ae-sensor-detail-icon-wrap.blue  { background: rgba(3,169,244,0.15); color: var(--info-color, #03a9f4); }
-      .ae-sensor-detail-icon-wrap.amber { background: rgba(255,152,0,0.15); color: var(--warning-color, #ff9800); }
-      .ae-sensor-detail-icon-wrap.green { background: rgba(76,175,80,0.15); color: var(--success-color, #4caf50); }
-
-      .ae-sensor-detail-value { font-size: 22px; font-weight: 400; color: var(--primary-text-color); margin-top: 4px; }
-      .ae-sensor-attrs { display: flex; flex-direction: column; gap: 8px; }
-      .ae-attr-row {
-        display: flex; justify-content: space-between; align-items: center;
-        font-size: 13px;
-        padding: 4px 0;
-        border-top: 1px solid var(--divider-color, rgba(255,255,255,0.05));
-        gap: 8px;
-      }
-      .ae-attr-row:first-child { border-top: none; }
-      .ae-attr-row--pad { padding: 8px 0; border-top: none; }
-      .ae-row-right { display: flex; align-items: center; gap: 8px; }
-
-      /* ── Device row ── */
-      .ae-device-row {
-        display: flex; align-items: center; gap: 12px;
-        background: var(--secondary-background-color, rgba(120,120,120,0.08));
-        padding: 12px; border-radius: 10px; margin-bottom: 12px;
-        border: 1px solid var(--divider-color);
-        min-height: 64px;
-      }
-      .ae-device-icon-wrap {
-        width: 44px; height: 44px; border-radius: 12px;
-        background: rgba(3,169,244,0.15); color: var(--info-color, #03a9f4);
-        display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0; --mdc-icon-size: 24px;
-      }
-      .ae-device-info { flex: 1; }
-      .ae-device-name { font-size: 15px; font-weight: 500; }
-      .ae-device-sub  { font-size: 12px; color: var(--secondary-text-color); margin-top: 2px; }
-      .ae-chevron { color: var(--secondary-text-color); --mdc-icon-size: 18px; }
-
-      /* ── Activity list ── */
-      .ae-act-list { margin-bottom: 12px; min-height: 80px; }
-      .ae-act-row {
-        display: flex; align-items: center; gap: 12px;
-        padding: 10px 0;
-        border-top: 1px solid var(--divider-color, rgba(255,255,255,0.05));
-      }
-      .ae-act-row:first-child { border-top: none; }
-      .ae-act-icon-wrap {
-        width: 36px; height: 36px; border-radius: 50%;
-        background: rgba(3,169,244,0.12); color: var(--info-color, #03a9f4);
-        display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0; --mdc-icon-size: 18px;
-      }
-      .ae-act-sound { font-size: 14px; font-weight: 500; }
-      .ae-act-meta  { font-size: 12px; color: var(--secondary-text-color); margin-top: 2px; }
-
-      /* ── Empty state ── */
-      .ae-empty-state {
-        display: flex; flex-direction: column; align-items: center;
-        justify-content: center; padding: 24px 16px; gap: 12px; text-align: center;
-      }
-      .ae-empty-icon { color: var(--disabled-text-color, #555); --mdc-icon-size: 40px; }
-      .ae-empty-copy { font-size: 14px; color: var(--secondary-text-color); }
-
-      /* ── Settings ── */
-      .ae-setting-row {
-        display: flex; align-items: center; justify-content: space-between; gap: 12px;
-        padding: 12px 0; min-height: 44px;
-        border-top: 1px solid var(--divider-color, rgba(255,255,255,0.06));
-      }
-      .ae-setting-row:first-of-type { border-top: none; }
-      .ae-setting-label { font-size: 14px; font-weight: 400; }
-      .ae-setting-sub   { font-size: 12px; color: var(--secondary-text-color); margin-top: 2px; }
-
-      /* Toggle switch */
-      .ae-toggle {
-        width: 44px; height: 26px; border-radius: 13px;
-        background: var(--divider-color, rgba(120,120,120,0.3));
-        position: relative; cursor: pointer; flex-shrink: 0;
-        transition: background 0.3s;
-      }
-      .ae-toggle::after {
-        content: ''; position: absolute; top: 3px; left: 3px;
-        width: 20px; height: 20px; border-radius: 50%;
-        background: #fff; transition: transform 0.25s;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-      }
-      .ae-toggle.on { background: var(--primary-color, #03a9f4); }
-      .ae-toggle.on::after { transform: translateX(18px); }
-
-      /* ── Webhook URL row ── */
-      .ae-webhook-url-row {
-        display: flex; gap: 8px; align-items: center;
-        margin-bottom: 8px;
-      }
-      .ae-input {
-        flex: 1; appearance: none; border: 1px solid var(--divider-color);
-        border-radius: 8px; padding: 10px 12px;
-        background: var(--secondary-background-color, rgba(120,120,120,0.08));
-        color: var(--primary-text-color); font-size: 13px;
-        font-family: inherit; outline: none; min-height: 44px;
-        transition: border-color 0.2s;
-      }
-      .ae-input:focus { border-color: var(--primary-color, #03a9f4); }
-      .ae-mono { font-family: 'Roboto Mono', monospace; font-size: 12px; }
-      .ae-clip { word-break: break-all; }
-      .ae-icon-btn {
-        width: 44px; height: 44px; flex-shrink: 0;
-        appearance: none; background: var(--secondary-background-color);
-        border: 1px solid var(--divider-color); border-radius: 8px;
-        color: var(--primary-text-color); cursor: pointer;
-        display: flex; align-items: center; justify-content: center;
-        transition: background 0.2s;
-      }
-      .ae-icon-btn:hover { background: rgba(3,169,244,0.1); color: var(--primary-color, #03a9f4); }
-
-      /* ── Buttons ── */
-      .ae-btn {
-        appearance: none; font: 500 14px/1 'Roboto', sans-serif;
-        border-radius: 10px; padding: 12px 16px;
-        cursor: pointer; display: flex; align-items: center;
-        justify-content: center; gap: 8px;
-        min-height: 44px; transition: background 0.2s, opacity 0.2s;
-      }
-      .ae-btn-full { width: 100%; }
-      .ae-btn-outline {
-        background: transparent;
-        border: 1px solid var(--divider-color);
-        color: var(--primary-text-color);
-      }
-      .ae-btn-outline:hover { background: var(--secondary-background-color); }
-      .ae-btn-ghost {
-        background: transparent; border: none;
-        color: var(--secondary-text-color);
-      }
-      .ae-btn-ghost:hover { color: var(--primary-text-color); background: var(--secondary-background-color); }
-      .ae-btn-danger {
-        background: rgba(244,67,54,0.1);
-        border: 1px solid rgba(244,67,54,0.25);
-        color: var(--error-color, #f44336);
-      }
-      .ae-btn-danger:hover { background: rgba(244,67,54,0.2); }
-
-      /* ── Toast ── */
-      .ae-toast {
-        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
-        background: var(--primary-text-color); color: var(--primary-background-color);
-        font-size: 13px; font-weight: 500;
-        padding: 10px 20px; border-radius: 999px;
-        pointer-events: none; opacity: 0;
-        transition: opacity 0.25s, transform 0.25s;
-        z-index: 9999;
-        white-space: nowrap;
-      }
-      .ae-toast.ae-toast-in { opacity: 1; transform: translateX(-50%) translateY(0); }
-    `;
+  _bind(dev) {
+    const root = this.shadowRoot;
+    root.querySelectorAll('[data-nav]').forEach((b) =>
+      b.addEventListener('click', () => {
+        history.pushState(null, '', b.dataset.nav);
+        window.dispatchEvent(new CustomEvent('location-changed', { bubbles: true, composed: true }));
+      }));
+    root.querySelectorAll('[data-flow]').forEach((b) =>
+      b.addEventListener('click', () => {
+        this._filter = b.dataset.flow;
+        this._lastKey = '';
+        this._update(true);
+      }));
+    root.querySelector('[data-act="test"]')?.addEventListener('click', (ev) => {
+      ev.currentTarget.disabled = true;
+      this._hass.callService(AE_DOMAIN, 'test_webhook', { device_id: dev.id });
+    });
+    root.querySelector('[data-act="clear"]')?.addEventListener('click', () =>
+      this._hass.callService(AE_DOMAIN, 'clear_history', { device_id: dev.id }));
+    root.querySelectorAll('[data-entity]').forEach((b) =>
+      b.addEventListener('click', () =>
+        this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: b.dataset.entity } }))));
   }
 }
 
-customElements.define('all-ears-card', AllEarsCard);
+class AllEarsCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _render() {
+    if (!this._hass || !this._config) return;
+    if (!this._form) {
+      this._form = document.createElement('ha-form');
+      this._form.computeLabel = (s) => ({
+        device_id: 'AllEars phone',
+        title: 'Title (optional)',
+        show_history: 'Show recent sounds',
+        history_hours: 'History window (hours)',
+      }[s.name] || s.name);
+      this._form.addEventListener('value-changed', (ev) => {
+        const config = { ...this._config, ...ev.detail.value };
+        Object.keys(config).forEach((k) => (config[k] === '' || config[k] == null) && delete config[k]);
+        this._config = config;
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
+      });
+      this.appendChild(this._form);
+    }
+    this._form.hass = this._hass;
+    this._form.data = { show_history: true, history_hours: 24, ...this._config };
+    this._form.schema = [
+      { name: 'device_id', selector: { device: { integration: AE_DOMAIN } } },
+      { name: 'title', selector: { text: {} } },
+      { name: 'show_history', selector: { boolean: {} } },
+      { name: 'history_hours', selector: { number: { min: 1, max: 168, mode: 'box', unit_of_measurement: 'h' } } },
+    ];
+  }
+}
+
+const AE_STYLES = `
+  :host { display: block; }
+  ha-card { display: block; overflow: hidden; }
+  .wrap > * { min-width: 0; }
+  .wrap { padding: 16px; display: grid; gap: 14px; }
+  .muted { color: var(--secondary-text-color); }
+  .small { font-size: 13px; }
+  .head { display: flex; align-items: center; gap: 12px; }
+  .ear { position: relative; width: 44px; height: 44px; flex: none; border-radius: 50%;
+    display: grid; place-items: center; background: rgba(var(--rgb-primary-color, 3, 169, 244), .12); color: var(--primary-color); }
+  .ear.active { background: rgba(var(--rgb-warning-color, 255, 166, 0), .16); color: var(--warning-color, #ffa600); }
+  .ear.off { background: var(--secondary-background-color); color: var(--disabled-text-color, #999); }
+  .ear .logo { width: 28px; height: 28px; object-fit: contain; position: relative; }
+  .ear.off .logo { opacity: .5; filter: grayscale(100%); }
+  .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid currentColor; opacity: 0; }
+  .ear.active .ring { animation: ae-ping 1.6s ease-out infinite; }
+  .ear.active .r2 { animation-delay: .8s; }
+  @keyframes ae-ping { 0% { transform: scale(.9); opacity: .55; } 100% { transform: scale(1.6); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .ear.active .ring { animation: none; opacity: .4; } }
+  .ttl { min-width: 0; }
+  .name { font-size: 17px; font-weight: 500; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status { font-size: 13px; color: var(--secondary-text-color); }
+  .status.active { color: var(--warning-color, #ffa600); font-weight: 500; }
+  .hero { border-radius: 12px; padding: 14px; background: var(--secondary-background-color); display: grid; gap: 6px; transition: background .3s; }
+  .hero[data-entity] { cursor: pointer; }
+  .hero.on { background: rgba(var(--rgb-warning-color, 255, 166, 0), .14); }
+  .lbl { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--secondary-text-color); }
+  .sound { font-size: 24px; font-weight: 500; line-height: 1.2; overflow-wrap: anywhere; }
+  .sound.muted { font-size: 17px; font-weight: 400; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 3px 9px; border-radius: 999px;
+    background: var(--card-background-color, #fff); color: var(--primary-text-color); }
+  .chip ha-icon { --mdc-icon-size: 15px; color: var(--secondary-text-color); }
+  .chip.flow ha-icon { color: var(--primary-color); }
+  .bar { width: 34px; height: 5px; border-radius: 3px; background: var(--divider-color); overflow: hidden; display: inline-block; }
+  .bar i { display: block; height: 100%; background: var(--primary-color); }
+  .sec { display: grid; gap: 8px; }
+  .sec-h { font-size: 13px; font-weight: 500; display: flex; gap: 6px; align-items: baseline; }
+  .flows { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .flows::-webkit-scrollbar { display: none; }
+  .fchip { flex: none; font: inherit; font-size: 13px; cursor: pointer; padding: 5px 12px; border-radius: 999px;
+    border: 1px solid var(--divider-color); background: transparent; color: var(--primary-text-color); display: inline-flex; gap: 6px; align-items: center; }
+  .fchip.sel { border-color: var(--primary-color); background: rgba(var(--rgb-primary-color, 3, 169, 244), .12); font-weight: 500; }
+  .fchip .n { font-size: 11px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--secondary-background-color); text-align: center; }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; }
+  .list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--divider-color); }
+  .list li:first-child { border-top: 0; }
+  .list ha-icon { --mdc-icon-size: 18px; color: var(--secondary-text-color); }
+  .li-s { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .li-f { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .li-t { font-size: 12.5px; white-space: nowrap; }
+  .setup { border: 1px dashed var(--divider-color); border-radius: 12px; padding: 12px 14px; font-size: 14px; display: grid; gap: 6px; }
+  .setup p { margin: 0; }
+  .setup ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--divider-color);
+    background: transparent; color: var(--primary-color); flex: 1 1 auto; }
+  .btn ha-icon { --mdc-icon-size: 18px; }
+  .btn.primary { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }
+  .btn.ghost { flex: 0 0 auto; color: var(--secondary-text-color); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn:focus-visible, .fchip:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+`;
+
+if (!customElements.get('all-ears-card')) customElements.define('all-ears-card', AllEarsCard);
+if (!customElements.get('all-ears-card-editor')) customElements.define('all-ears-card-editor', AllEarsCardEditor);
+
 window.customCards = window.customCards || [];
-// Avoid duplicate registration on hot-reload
-if (!window.customCards.find(c => c.type === 'all-ears-card')) {
+if (!window.customCards.find((c) => c.type === 'all-ears-card')) {
   window.customCards.push({
     type: 'all-ears-card',
-    name: 'AllEars Sound Tracker',
+    name: 'AllEars',
     preview: true,
-    description: 'Full dashboard card for the AllEars Home Assistant integration.',
+    description: 'Live sound status, last sound, flows and recent history from an AllEars phone.',
+    documentationURL: 'https://github.com/cliqueraft/allears-hacs-plugin',
   });
 }
+console.info(`%c ALLEARS-CARD %c ${AE_VERSION} `, 'background:#03a9f4;color:#fff;border-radius:3px 0 0 3px', 'background:#444;color:#fff;border-radius:0 3px 3px 0');

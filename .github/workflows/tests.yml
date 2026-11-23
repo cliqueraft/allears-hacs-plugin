@@ -16,10 +16,21 @@ jobs:
         include:
           - python-version: "3.12"
             ha-version: "2024.1.0"
-            phcc-version: "0.13.109"
+            phcc-version: "==0.13.109"
+            extra-deps: "josepy<1.15"
           - python-version: "3.12"
             ha-version: "2024.6.0"
-            phcc-version: "0.13.205"
+            phcc-version: "==0.13.205"
+            extra-deps: "josepy<1.15"
+          # Recent Home Assistant: catches removed core APIs early. Installed
+          # with HA's own package constraints so transitive deps (aiodns,
+          # pycares, ...) match what HA ships. Bump both lines together.
+          - python-version: "3.13"
+            ha-version: "2026.2.3"
+            phcc-version: "==0.13.316"
+            constraints: "https://raw.githubusercontent.com/home-assistant/core/2026.2.3/homeassistant/package_constraints.txt"
+            # aiodns 4.0.0 breaks with pycares 5.1+ (Oct 2026); HA shipped on 5.0.x.
+            extra-deps: "pycares==5.0.1"
 
     steps:
       - uses: actions/checkout@v4
@@ -29,15 +40,21 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      # Older pytest-homeassistant-custom-component sets the "US/Pacific" time
+      # zone; newer Ubuntu runners ship those legacy names in tzdata-legacy.
+      - name: Install legacy time zone names
+        run: sudo apt-get install -y -q tzdata-legacy || true
+
       - name: Install dependencies
         run: |
           pip install \
-            "josepy<1.15" \
             pytest \
             pytest-asyncio \
-            pytest-homeassistant-custom-component==${{ matrix.phcc-version }} \
+            "pytest-homeassistant-custom-component${{ matrix.phcc-version }}" \
             pytest-cov \
-            freezegun
+            freezegun \
+            ${{ matrix.extra-deps && format('"{0}"', matrix.extra-deps) || '' }} \
+            ${{ matrix.constraints && format('-c "{0}"', matrix.constraints) || '' }}
 
       - name: Run tests
         run: |

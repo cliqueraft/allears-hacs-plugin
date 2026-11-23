@@ -59,13 +59,25 @@ async def test_attach_trigger(hass: HomeAssistant) -> None:
     )
 
     # Fire the correct event
-    hass.bus.async_fire(EVENT_SOUND_DETECTED, {ATTR_FLOW_NAME: "Speech test"})
+    hass.bus.async_fire(
+        EVENT_SOUND_DETECTED, {"device_id": "test_device_id", ATTR_FLOW_NAME: "Speech test"}
+    )
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+
+    # Same flow from another phone must not trigger
+    hass.bus.async_fire(
+        EVENT_SOUND_DETECTED, {"device_id": "other_device", ATTR_FLOW_NAME: "Speech test"}
+    )
     await hass.async_block_till_done()
 
     assert len(calls) == 1
 
     # Fire mismatch event
-    hass.bus.async_fire(EVENT_SOUND_DETECTED, {ATTR_FLOW_NAME: "Barking"})
+    hass.bus.async_fire(
+        EVENT_SOUND_DETECTED, {"device_id": "test_device_id", ATTR_FLOW_NAME: "Barking"}
+    )
     await hass.async_block_till_done()
 
     assert len(calls) == 1  # Should not increase
@@ -74,7 +86,9 @@ async def test_attach_trigger(hass: HomeAssistant) -> None:
     detach()
 
     # Fire again after detach
-    hass.bus.async_fire(EVENT_SOUND_DETECTED, {ATTR_FLOW_NAME: "Speech test"})
+    hass.bus.async_fire(
+        EVENT_SOUND_DETECTED, {"device_id": "test_device_id", ATTR_FLOW_NAME: "Speech test"}
+    )
     await hass.async_block_till_done()
 
     assert len(calls) == 1  # Should not increase

@@ -25,7 +25,7 @@ SENSOR_LAST_FLOW: Final[str] = "last_flow"
 DATA_COORDINATOR: Final[str] = "coordinator"
 DATA_SERVICES_SETUP: Final[str] = "services_setup"
 
-VERSION: Final[str] = "1.0.0"
+VERSION: Final[str] = "1.1.0"
 
 BINARY_SENSOR_ACTIVE: Final[str] = "sound_active"
 BINARY_SENSOR_ACTIVE_WINDOW_SECONDS: Final[int] = 30
@@ -33,6 +33,16 @@ BINARY_SENSOR_ACTIVE_WINDOW_SECONDS: Final[int] = 30
 # "select" added here to enable the Active Flow Filter entity.
 # Add future platforms (e.g. "number", "button") here as the product grows.
 PLATFORMS: Final[list[str]] = ["sensor", "binary_sensor", "select"]
+
+# Event data key that ties a sound event to the HA device it came from, so
+# device triggers only fire for their own phone.
+ATTR_DEVICE_ID: Final[str] = "device_id"
+
+SENSOR_LAST_SEEN: Final[str] = "last_seen"
+
+# Lovelace card, served by the integration and loaded automatically.
+CARD_URL_PATH: Final[str] = "/all-ears-card"
+CARD_FILENAME: Final[str] = "all-ears-card.js"
 
 DEFAULT_DEVICE_NAME: Final[str] = "AllEars Device"
 

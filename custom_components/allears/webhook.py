@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from aiohttp.web import Request, Response
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     ACTION_REGISTER_FLOWS,
@@ -23,7 +24,6 @@ from .const import (
     CONFIDENCE_MAX,
     CONFIDENCE_MIN,
     DOMAIN,
-    EVENT_SOUND_DETECTED,
     WEBHOOK_MAX_SIZE_BYTES,
     WEBHOOK_TIMESTAMP_DRIFT_SECONDS,
 )
@@ -32,16 +32,27 @@ from .coordinator import AllEarsDataUpdateCoordinator
 LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
-def _find_coordinator(hass: HomeAssistant) -> AllEarsDataUpdateCoordinator | None:
-    """Return the first AllEarsDataUpdateCoordinator found in hass.data."""
-    for entry_coordinator in hass.data.get(DOMAIN, {}).values():
-        if isinstance(entry_coordinator, AllEarsDataUpdateCoordinator):
-            return entry_coordinator
-    return None
+def _find_coordinator(
+    hass: HomeAssistant, webhook_id: str | None = None
+) -> AllEarsDataUpdateCoordinator | None:
+    """Return the coordinator that owns this webhook id.
+
+    Each AllEars phone has its own config entry and webhook, so events must
+    land on that phone's device, not on whichever entry happens to be first.
+    """
+    coordinators = [
+        c
+        for c in hass.data.get(DOMAIN, {}).values()
+        if isinstance(c, AllEarsDataUpdateCoordinator)
+    ]
+    for coordinator in coordinators:
+        if webhook_id is not None and coordinator.webhook_id == webhook_id:
+            return coordinator
+    return coordinators[0] if coordinators else None
 
 
 async def _handle_register_flows(
-    hass: HomeAssistant, query: Mapping[str, str]
+    hass: HomeAssistant, webhook_id: str, query: Mapping[str, str]
 ) -> Response:
     """Handle action=register_flows — store the app's flow catalogue.
 
@@ -62,7 +73,7 @@ async def _handle_register_flows(
             content_type="application/json",
         )
 
-    coordinator = _find_coordinator(hass)
+    coordinator = _find_coordinator(hass, webhook_id)
     if coordinator is not None:
         await coordinator.async_register_flows(flow_names)
         LOGGER.info("Flow registry updated via webhook: %s", flow_names)
@@ -95,7 +106,7 @@ async def handle_webhook(
         # Step 2 — Route registration action before normal sound processing
         action = query.get("action")
         if action == ACTION_REGISTER_FLOWS:
-            return await _handle_register_flows(hass, query)
+            return await _handle_register_flows(hass, webhook_id, query)
 
         # Step 3 — Extract parameters, supporting both legacy and new Android app keys
         flow_val = query.get(ATTR_FLOW_NAME) or query.get("flow")
@@ -123,7 +134,7 @@ async def handle_webhook(
             ATTR_CONFIDENCE: conf_val if conf_val is not None else 1.0,
             ATTR_TIMESTAMP: ts_val
             if ts_val is not None
-            else int(datetime.now(timezone.utc).timestamp() * 1000),
+            else int(datetime.now(UTC).timestamp() * 1000),
         }
 
         # Step 4 — App identity check (Warn but allow if missing)
@@ -189,7 +200,7 @@ async def handle_webhook(
 
         # Step 6 — Timestamp drift check (Skip if initially missing)
         if query.get(ATTR_TIMESTAMP) is not None:
-            now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+            now_ms = int(datetime.now(UTC).timestamp() * 1000)
             drift_ms = timestamp - now_ms
             if drift_ms > WEBHOOK_TIMESTAMP_DRIFT_SECONDS * 1000:
                 return Response(
@@ -198,12 +209,23 @@ async def handle_webhook(
                     content_type="application/json",
                 )
 
-        # Step 7 — Pass to coordinator and fire event
-        coordinator = _find_coordinator(hass)
-        if isinstance(coordinator, AllEarsDataUpdateCoordinator):
+        # Step 7 — Hand to the coordinator, which stores it and fires the event
+        coordinator = _find_coordinator(hass, webhook_id)
+        if coordinator is None:
+            LOGGER.warning("Webhook received but AllEars is not set up yet")
+            return Response(
+                status=503,
+                body=json.dumps({"error": "not_ready"}),
+                content_type="application/json",
+            )
+        try:
             await coordinator.async_handle_sound_event(payload)
-
-        hass.bus.async_fire(EVENT_SOUND_DETECTED, payload)
+        except HomeAssistantError as err:
+            return Response(
+                status=422,
+                body=json.dumps({"error": "validation_error", "detail": str(err)}),
+                content_type="application/json",
+            )
 
         return Response(
             status=200,

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-23
+
+### Fixed
+- Dashboard card was unreachable on Home Assistant 2025.7 and later:
+  `register_static_path` was removed from core. The card is now served with
+  `async_register_static_paths` (with a fallback for older cores).
+- The card looked for entity ids the integration never created
+  (`sensor.allears_last_detected_sound` and friends), so it showed blanks.
+  It now finds the AllEars entities through the device registry.
+- `sound_active` turned on (and fired automations) when the app synced its
+  flows or when history was cleared. It now turns on only for a real sound.
+- Device triggers fired for every AllEars phone. Events now carry the
+  `device_id` and each trigger only listens to its own phone.
+- Webhooks always went to the first configured entry. Each webhook now
+  updates its own phone.
+- The Flow field was missing from the device trigger in the automation
+  editor. It is now a dropdown of the flows the phone has synced.
+- The last sound sensor had none of the documented attributes.
+- Card rendered flow and sound names as raw HTML.
+- Setup screens pointed to an app setting that does not exist.
+- Config flow crashed when Home Assistant had no URL configured.
+
+### Added
+- Several phones: one config entry, device and webhook per phone.
+- Card loads automatically; no dashboard resource needed. New visual editor
+  (pick the phone, title, history window).
+- Card shows connection status, live listening state, last sound with flow,
+  confidence and time, the synced flows as filters, and recent sounds from
+  the recorder, so history survives a page reload.
+- `Last seen` diagnostic sensor: when the phone last reached Home Assistant.
+- Sound sensors keep their last value across restarts.
+- Optional `device_id` on `allears.test_webhook` and `allears.clear_history`.
+- Device trigger can also filter on the sound name.
+- Webhook URL (home and remote) shown again under the integration's Configure.
+
+### Changed
+- New webhook ids are 16 hex characters (was 8). Existing ids keep working.
+- Entity names come from translations ("Last sound", "Last flow",
+  "Sound active", "Flow filter", "Last seen"). Existing entity ids are kept.
+- Invalid sound events return HTTP 422 instead of 500.
+
 ## [1.0.0] - 2026-03-22
 
 ### Added

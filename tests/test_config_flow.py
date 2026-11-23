@@ -64,15 +64,40 @@ async def test_flow_webhook_url_step_creates_entry(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.asyncio
-async def test_flow_aborts_if_already_configured(hass: HomeAssistant) -> None:
-    """Test the flow aborts if an AllEars entry is already configured."""
-    entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, data={})
-    entry.add_to_hass(hass)
+async def test_flow_allows_a_second_phone(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """A second phone gets its own entry and webhook."""
+    mock_config_entry.add_to_hass(hass)
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
-    assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
+    assert result["type"] == FlowResultType.FORM
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_DEVICE_NAME: "Kitchen tablet"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_WEBHOOK_ID] != mock_config_entry.data[CONF_WEBHOOK_ID]
+    assert len(result["data"][CONF_WEBHOOK_ID]) == 16
+
+
+@pytest.mark.asyncio
+async def test_flow_rejects_duplicate_name(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """Two phones cannot share a name."""
+    mock_config_entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_DEVICE_NAME: DEVICE_NAME_FOR_TESTS}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {CONF_DEVICE_NAME: "name_in_use"}
 
 
 @pytest.mark.asyncio
