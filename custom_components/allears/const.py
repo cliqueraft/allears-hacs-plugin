@@ -25,7 +25,7 @@ SENSOR_LAST_FLOW: Final[str] = "last_flow"
 DATA_COORDINATOR: Final[str] = "coordinator"
 DATA_SERVICES_SETUP: Final[str] = "services_setup"
 
-VERSION: Final[str] = "1.1.0"
+VERSION: Final[str] = "1.2.0"
 
 BINARY_SENSOR_ACTIVE: Final[str] = "sound_active"
 BINARY_SENSOR_ACTIVE_WINDOW_SECONDS: Final[int] = 30
