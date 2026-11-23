@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-11-23
+## [1.2.0] - 2026-11-24
+
+The April "v1.1.0" GitHub release shipped the 1.0.0 code, so these changes are released as 1.2.0.
 
 ### Fixed
 - Dashboard card was unreachable on Home Assistant 2025.7 and later:

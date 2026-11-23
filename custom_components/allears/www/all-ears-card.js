@@ -8,7 +8,7 @@
  */
 
 const AE_DOMAIN = 'allears';
-const AE_VERSION = '1.1.0';
+const AE_VERSION = '1.2.0';
 const AE_ALL_FLOWS = 'All Flows';
 // App logo served next to this file (/all-ears-card/logo.png).
 const AE_LOGO_URL = (() => {
