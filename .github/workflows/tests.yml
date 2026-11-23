@@ -24,6 +24,8 @@ jobs:
           - python-version: "3.13"
             ha-version: "latest"
             phcc-version: ""
+            # pycares 5 removed names that HA's pinned aiodns still uses.
+            extra-deps: "pycares<5"
 
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +35,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      # Older pytest-homeassistant-custom-component sets the "US/Pacific" time
+      # zone; newer Ubuntu runners ship those legacy names in tzdata-legacy.
+      - name: Install legacy time zone names
+        run: sudo apt-get install -y -q tzdata-legacy || true
+
       - name: Install dependencies
         run: |
           pip install \
@@ -41,7 +48,8 @@ jobs:
             pytest-asyncio \
             "pytest-homeassistant-custom-component${{ matrix.phcc-version }}" \
             pytest-cov \
-            freezegun
+            freezegun \
+            ${{ matrix.extra-deps }}
 
       - name: Run tests
         run: |
