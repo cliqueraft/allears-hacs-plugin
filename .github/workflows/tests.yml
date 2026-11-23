@@ -17,9 +17,11 @@ jobs:
           - python-version: "3.12"
             ha-version: "2024.1.0"
             phcc-version: "==0.13.109"
+            extra-deps: "josepy<1.15"
           - python-version: "3.12"
             ha-version: "2024.6.0"
             phcc-version: "==0.13.205"
+            extra-deps: "josepy<1.15"
           # Recent Home Assistant: catches removed core APIs early. Installed
           # with HA's own package constraints so transitive deps (aiodns,
           # pycares, ...) match what HA ships. Bump both lines together.
