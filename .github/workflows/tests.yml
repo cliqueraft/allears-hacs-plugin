@@ -48,7 +48,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install \
-            "josepy<1.15" \
             pytest \
             pytest-asyncio \
             "pytest-homeassistant-custom-component${{ matrix.phcc-version }}" \
