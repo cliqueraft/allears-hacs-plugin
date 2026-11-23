@@ -2,53 +2,102 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set up AllEars",
-        "description": "This will register a webhook to receive data from the AllEars Android app.",
+        "title": "Add an AllEars phone",
+        "description": "Give this phone a name. Each phone running AllEars gets its own device, webhook and entities.",
         "data": {
-          "device_name": "Device Name"
+          "device_name": "Phone name"
+        },
+        "data_description": {
+          "device_name": "For example \"Bedroom phone\". You can change it later."
         }
       },
       "webhook_url": {
-        "title": "Copy your webhook URL",
-        "description": "Paste this URL into the AllEars Android app under\nSettings → Home Assistant Webhook URL:\n\n`{webhook_url}`\n\nTap Submit when done."
+        "title": "Connect the AllEars app",
+        "description": "**1. Copy this URL** (phone on the same Wi-Fi as Home Assistant):\n\n`{webhook_url}`\n\nAway from home, use this one instead: `{remote_url}`\n\n**2. In AllEars**, open a flow, add the action **Trigger Webhook** and paste the URL. Add it to every flow you want Home Assistant to hear about.\n\n**3. In AllEars → Settings**, tap **Sync Flows with Home Assistant** so your flows show up in automations and on the dashboard card.\n\nSelect **Submit** to finish. You can see this URL again under the integration's **Configure** button."
       }
     },
+    "error": {
+      "name_required": "Enter a name.",
+      "name_in_use": "Another AllEars phone already uses this name."
+    },
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "This phone is already set up"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Update device settings",
-        "description": "Webhook ID (read-only): {webhook_id}",
+        "title": "AllEars phone settings",
+        "description": "Webhook URL for the AllEars app:\n\n`{webhook_url}`\n\nAway from home: `{remote_url}`\n\nWebhook ID: `{webhook_id}` (cannot be changed)",
         "data": {
-          "device_name": "Device name"
+          "device_name": "Phone name"
         }
       }
     }
   },
   "entity": {
+    "sensor": {
+      "last_sound": {
+        "name": "Last sound",
+        "state_attributes": {
+          "flow_name": {
+            "name": "Flow"
+          },
+          "confidence": {
+            "name": "Confidence"
+          },
+          "timestamp": {
+            "name": "Heard at"
+          }
+        }
+      },
+      "last_flow": {
+        "name": "Last flow"
+      },
+      "last_seen": {
+        "name": "Last seen"
+      }
+    },
+    "binary_sensor": {
+      "sound_active": {
+        "name": "Sound active"
+      }
+    },
     "select": {
       "active_flow_filter": {
-        "name": "Active Flow Filter"
+        "name": "Flow filter"
       }
     }
   },
   "services": {
     "clear_history": {
-      "name": "Clear Sound History",
-      "description": "Resets all stored sound detection data across all AllEars devices."
+      "name": "Clear last sound",
+      "description": "Forgets the last detected sound and flow. Registered flows are kept.",
+      "fields": {
+        "device_id": {
+          "name": "Phones",
+          "description": "Leave empty for all AllEars phones."
+        }
+      }
     },
     "test_webhook": {
-      "name": "Test Webhook",
-      "description": "Fires a synthetic AllEars sound event. Use this to verify that your HA automations are configured correctly before testing with the real Android app."
+      "name": "Send test sound",
+      "description": "Fires a \"Test Sound\" event from \"Test Flow\", exactly like the app would. Use it to check your automations.",
+      "fields": {
+        "device_id": {
+          "name": "Phones",
+          "description": "Leave empty for all AllEars phones."
+        }
+      }
     }
   },
   "device_automation": {
     "trigger_type": {
-      "sound_detected": "AllEars triggered a flow"
+      "sound_detected": "AllEars heard a sound"
+    },
+    "extra_fields": {
+      "flow_name": "Flow",
+      "sound_class": "Sound (exact name, optional)"
     }
   }
 }
-

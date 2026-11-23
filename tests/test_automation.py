@@ -135,8 +135,6 @@ async def test_end_to_end_native_device_trigger(
     assert hass.states.get("input_boolean.test_native_success").state == "off"
 
     # 3. Simulate the Webhook firing the EVENT_SOUND_DETECTED event
-    from custom_components.allears.const import EVENT_SOUND_DETECTED
-
     payload = {
         "app": "AllEars",
         "flow_name": "Doorbell",
@@ -144,7 +142,8 @@ async def test_end_to_end_native_device_trigger(
         "confidence": 0.99,
         "timestamp": 1234567890000,
     }
-    hass.bus.async_fire(EVENT_SOUND_DETECTED, payload)
+    coordinator = hass.data[DOMAIN][setup_integration.entry_id]
+    await coordinator.async_handle_sound_event(payload)
     await hass.async_block_till_done()
 
     # 4. Prove the automation successfully fired and flipped the switch!

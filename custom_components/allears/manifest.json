@@ -1,16 +1,20 @@
 {
   "domain": "allears",
   "name": "AllEars Sound Tracker",
+  "after_dependencies": [
+    "frontend"
+  ],
   "codeowners": [
     "@cliqueraft"
   ],
   "config_flow": true,
   "dependencies": [
+    "http",
     "webhook"
   ],
   "documentation": "https://github.com/cliqueraft/allears-hacs-plugin",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/cliqueraft/allears-hacs-plugin/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

@@ -10,7 +10,7 @@ Subtitle: Home Assistant integration for the AllEars Android app
 This integration receives classified sound events directly from the AllEars Android app via a local webhook. It creates sensors to track the latest detected sounds and flows within Home Assistant. You can use these entities to build powerful automations or trigger immediate alerts.
 
 ## Prerequisites
-1. Home Assistant `2024.1.0` or later
+1. Home Assistant `2024.1.0` or later (CI tests 2024.1, 2024.6 and the current release)
 2. AllEars app installed on Android (https://play.google.com/store/apps/details?id=com.cliqueraft.allears&hl=en_IN)
 3. HA reachable from the Android device (local network or Nabu Casa)
 
@@ -33,34 +33,39 @@ This integration receives classified sound events directly from the AllEars Andr
 **Step 1: Add the integration**
 Settings → Devices & Services → Add Integration → search "AllEars"
 
-**Step 2: Name your device**
-Enter a name (e.g. "Living Room AllEars")
+**Step 2: Name the phone**
+For example "Bedroom phone". Each phone running AllEars is added separately and gets its own device, webhook and entities.
 
 **Step 3: Copy the webhook URL**
-The next screen shows your unique webhook URL — copy it exactly.
-It looks like: `http://<your-ha-ip>:8123/api/webhook/<id>`
-This URL is permanent — it does not change after setup.
+The next screen shows the URL for your home network and, if you have one set up, a remote URL. You can see it again later under the integration's **Configure** button.
 
-**Step 4: Paste into AllEars app**
-Open AllEars → Settings → Home Assistant → Webhook URL
-Paste the URL → Save
+**Step 4: Paste it into AllEars**
+In AllEars, open a flow, add the action **Trigger Webhook** and paste the URL. Do this for every flow you want Home Assistant to hear about.
 
-**Step 5: Verify**
-In HA: Developer Tools → Services → `allears.test_webhook` → Call
-The `sensor.last_detected_sound` entity should show "Test Sound"
+**Step 5: Sync your flows**
+In AllEars → Settings, tap **Sync Flows with Home Assistant**. Your flows then show up in the automation editor and on the dashboard card.
 
-## Lovelace Dashboard Card
-AllEars includes a beautiful, native-feeling custom card for your dashboard.
+**Step 6: Verify**
+Developer Tools → Actions → `allears.test_webhook` → Perform action. The phone's *Last sound* entity should show "Test Sound".
 
-**Step 1: Register the Resource**
-1. Settings → Dashboards → Resources (top right 3-dot menu) → Add Resource
-2. URL: `/all-ears-card/all-ears-card.js`
-3. Resource Type: `JavaScript Module`
+## Dashboard card
+The integration loads the card automatically; there is no resource to add.
 
-**Step 2: Add the Card**
-1. Go to your Dashboard → Edit Dashboard → Add Card
-2. Search for **AllEars Sound Tracker**
-3. Configure your card using the built-in visual editor!
+1. Edit a dashboard → Add card → search **AllEars**
+2. Pick the phone in the visual editor (optional: title, history window)
+
+The card shows whether the phone is connected and when it was last seen, a live "sound detected" state, the last sound with its flow, confidence and time, your synced flows as filters, and the recent sounds from Home Assistant's history. Admins also get **Send test sound**, **Automate** (opens the device page, where new automations come pre-filled with the AllEars trigger) and **Clear**.
+
+YAML:
+```yaml
+type: custom:all-ears-card
+device_id: <your AllEars device id>   # optional, defaults to the first phone
+title: Nursery                         # optional
+show_history: true                     # optional
+history_hours: 24                      # optional, 1-168
+```
+
+If you added `/all-ears-card/all-ears-card.js` as a dashboard resource for an older version, you can remove it.
 
 ## Webhook Specification
 The integration robustly relies on **GET** requests with **URL Query Parameters** to guarantee compliance with all variants of the Android client.
@@ -73,74 +78,72 @@ GET /api/webhook/<id>?app=AllEars&flow_name=Security&sound_class=Glass+Breaking&
 - Enforced verification on timestamp drift and confidence value (`0.0`–`1.0`).
 
 ## Entities created
-| Entity ID | Type | Description | Resets |
-|-----------|------|-------------|--------|
-| `sensor.last_detected_sound` | Sensor | The YAMNet sound class name of the most recently detected sound | Persistent |
-| `sensor.last_triggered_flow` | Sensor | The name of the AllEars flow that matched the detected sound | Persistent |
-| `binary_sensor.sound_active` | Binary Sensor | On for 30 seconds after any sound detection, then auto-resets to off | Auto (30s) |
+One set per phone. Entity ids start with the phone's name, e.g. `sensor.bedroom_phone_last_sound`.
 
-### Attributes
-All `extra_state_attributes` exposed by `sensor.last_detected_sound`:
-- `flow_name`: name of the matched flow
-- `confidence`: detection confidence score (0.000–1.000)
-- `timestamp`: ISO8601 UTC datetime of detection
-- `last_updated`: ISO8601 UTC datetime coordinator last updated
+| Entity | Type | Description |
+|-----------|------|-------------|
+| Last sound | Sensor | Sound name of the most recent detection. Kept across restarts. |
+| Last flow | Sensor (enum) | The AllEars flow that matched it. Options are the synced flows. |
+| Sound active | Binary sensor | On for 30 seconds after a detection, then off. Only real sounds turn it on. |
+| Flow filter | Select | The synced flows. Picking one fires `allears_flow_selected`. |
+| Last seen | Sensor (diagnostic) | When the phone last reached Home Assistant (sound or flow sync). |
+
+Attributes of *Last sound*: `flow_name`, `confidence` (0-1), `timestamp` (ISO 8601, when the phone heard it), `last_updated`.
+
+## Event
+Every detection fires `allears_sound_detected` with `device_id`, `flow_name`, `sound_class`, `confidence`, `timestamp` and `app`.
 
 ## Services
 | Service | Description | Fields |
 |---------|-------------|--------|
-| `allears.clear_history` | Resets all sound detection history across all AllEars devices. Useful for testing. | None |
-| `allears.test_webhook` | Fires a synthetic sound event (sound_class="Test Sound", confidence=1.0). Use this to verify your HA automations are wired correctly. | None |
+| `allears.test_webhook` | Fires a "Test Sound" event from "Test Flow", exactly like the app. | `device_id` (optional, one or more phones) |
+| `allears.clear_history` | Forgets the last sound and flow. Synced flows are kept. | `device_id` (optional) |
 
 ## Automation examples
 
-You should exclusively use the native Home Assistant **Device Trigger** the integration automatically creates for you. It handles flow names and sound matches instantly and natively!
+Use the **device trigger**: it only fires for the phone you pick.
 
-### Example 1 — Alert on glass breaking via "Security" flow:
-Using the Home Assistant Visual Automation Editor:
-1. Triggers → Add Trigger → **Device**
-2. Select your `AllEars Device`
-3. Trigger: **AllEars triggered a flow**
-4. Flow Name: `Security` 
+### Example 1: alert when the Security flow fires
+1. Triggers → Add trigger → **Device** → pick your AllEars phone
+2. Trigger: **AllEars heard a sound**
+3. Flow: pick `Security` from the list (optional: Sound, for an exact sound name)
 
-**YAML Equivalent:**
+**YAML:**
 ```yaml
-automation:
-  alias: "Alert on glass breaking"
-  trigger:
-    - platform: device
-      domain: allears
-      device_id: <your-device-id>
-      type: sound_detected
-      flow_name: "Security"
-  action:
-    - service: notify.mobile_app
-      data:
-        title: "AllEars Alert"
-        message: "Glass breaking detected by the Security flow!"
+triggers:
+  - trigger: device
+    domain: allears
+    device_id: <your-device-id>
+    type: sound_detected
+    flow_name: Security
+actions:
+  - action: notify.mobile_app_my_phone
+    data:
+      title: AllEars
+      message: "{{ trigger.event.data.sound_class }} heard by the Security flow"
 ```
 
-### Example 2 — Trigger a siren while sound_active is on:
+### Example 2: siren while a sound is active
 ```yaml
-automation:
-  alias: "Siren on sound active"
-  trigger:
-    - platform: state
-      entity_id: binary_sensor.sound_active
-      to: "on"
-  action:
-    - service: siren.turn_on
-      target:
-        entity_id: siren.alarm
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.bedroom_phone_sound_active
+    to: "on"
+actions:
+  - action: siren.turn_on
+    target:
+      entity_id: siren.alarm
 ```
 
 ## Troubleshooting
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Webhook URL unreachable from phone | HA not accessible from Android device's network | Ensure phone and HA are on the same LAN, or enable remote access via Nabu Casa (Settings → Home Assistant Cloud). |
-| `binary_sensor.sound_active` resets too quickly | 30-second window is by design | This is intentional. Create automations that trigger on the state change to "on" rather than relying on it staying on. |
-| `sensor.last_detected_sound` shows unexpected sounds | YAMNet confidence threshold in AllEars is set below 0.3 | Open AllEars → Settings → Detection Sensitivity and raise the confidence threshold. |
-| Integration loads but never receives any events | | Run Developer Tools → Services → `allears.test_webhook`. If sensor updates: the integration is working — check the Android app's webhook URL setting and network connectivity. If sensor does not update: reload the integration via Settings → Devices & Services → AllEars → Reload. |
+| Webhook URL unreachable from phone | HA not reachable from the phone's network | Put the phone on the same network as HA, or set up remote access (Settings → System → Network) and use the remote URL. |
+| Card says "Waiting for the phone" | The phone has not called the webhook yet | In AllEars Settings, tap **Sync Flows with Home Assistant**. |
+| No events arrive | | Watch the phone's *Last seen* sensor. If it never changes, the phone can't reach HA: check the URL in the flow's Trigger Webhook action. If it changes but no sounds arrive, check that the flow has the Trigger Webhook action. `allears.test_webhook` tests your automations without the phone. |
+| *Sound active* turns off after 30 s | By design | Trigger on the change to "on", or use the device trigger. |
+| Unexpected sounds | Detection threshold in AllEars is low | Raise the confidence threshold in AllEars. |
+| A flow name is split in two | The app sends the flow list comma-separated | Avoid commas in flow names. |
 
 ## Contributing
 Requirements for all PRs:

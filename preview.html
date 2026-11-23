@@ -1,348 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AllEars Card — Local Preview</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&family=Roboto+Mono&display=swap"
-    rel="stylesheet" />
+  <title>AllEars Card Preview</title>
+  <!-- Local preview of the Lovelace card with a mock `hass`. Serve the repo
+       root (e.g. `python -m http.server`) and open /preview.html. -->
   <style>
     :root {
-      --primary-background-color: #f4f6f9;
-      --card-background-color: #ffffff;
-      --secondary-background-color: rgba(0, 0, 0, 0.03);
-      --primary-text-color: #1c1e27;
-      --secondary-text-color: #68707c;
-      --disabled-text-color: #aeb4be;
-      --divider-color: rgba(0, 0, 0, 0.06);
-      --primary-color: #4b6afa;
-      --info-color: #4b6afa;
-      --warning-color: #ffb822;
-      --success-color: #1dc9b7;
-      --error-color: #fd397a;
-      --ha-card-border-radius: 16px;
-      --ha-card-border-width: 1px;
-      --ha-card-border-color: rgba(0, 0, 0, 0.05);
-      --ha-card-box-shadow: 0 8px 24px rgba(17, 24, 39, 0.04);
+      --primary-background-color: #f4f6f9; --card-background-color: #fff; --secondary-background-color: #f0f2f5;
+      --primary-text-color: #1c1e27; --secondary-text-color: #68707c; --disabled-text-color: #aeb4be;
+      --divider-color: rgba(0,0,0,.12); --primary-color: #03a9f4; --rgb-primary-color: 3,169,244;
+      --warning-color: #ffa600; --rgb-warning-color: 255,166,0; --text-primary-color: #fff;
     }
-
-    body {
-      margin: 0;
-      background: var(--primary-background-color);
-      font-family: 'Roboto', sans-serif;
-      display: flex;
-      min-height: 100vh;
-      color: var(--primary-text-color);
+    body.dark {
+      --primary-background-color: #111; --card-background-color: #1c1c1c; --secondary-background-color: #282828;
+      --primary-text-color: #e1e1e1; --secondary-text-color: #9b9b9b; --divider-color: rgba(255,255,255,.12);
     }
-
-    .sidebar {
-      width: 250px;
-      background: var(--card-background-color);
-      border-right: 1px solid var(--divider-color);
-      display: flex;
-      flex-direction: column;
-      padding: 0;
-      box-shadow: 2px 0 12px rgba(0,0,0,0.02);
-      z-index: 10;
-    }
-
-    .sidebar-header {
-      padding: 24px 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 1px solid var(--divider-color);
-    }
-
-    .sidebar-header span {
-      font-size: 18px;
-      font-weight: 600;
-    }
-
-    .nav-group-title {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--secondary-text-color);
-      padding: 24px 20px 8px;
-    }
-
-    .toolbar-controls {
-      display: flex;
-      flex-direction: column;
-      padding: 0 12px;
-      gap: 4px;
-    }
-
-    .ctrl-btn {
-      appearance: none;
-      background: transparent;
-      border: none;
-      color: var(--secondary-text-color);
-      font: 500 14px 'Roboto', sans-serif;
-      text-align: left;
-      padding: 12px 16px;
-      border-radius: 10px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      transition: all 0.2s ease;
-    }
-
-    .ctrl-btn:hover {
-      background: var(--secondary-background-color);
-      color: var(--primary-text-color);
-    }
-
-    .ctrl-btn.active {
-      background: rgba(75, 106, 250, 0.08);
-      color: var(--primary-color);
-    }
-
-    .main-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
-    }
-
-    .top-header {
-      height: 72px;
-      padding: 0 40px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--divider-color);
-      background: var(--card-background-color);
-    }
-
-    .header-title {
-      font-size: 20px;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .dashboard-area {
-      padding: 32px 40px;
-      max-width: 1400px;
-      margin: 0 auto;
-      width: 100%;
-      box-sizing: border-box;
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 24px;
-    }
-
-    #editor-container {
-      display: none;
-      background: var(--card-background-color);
-      border: 1px solid var(--divider-color);
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: var(--ha-card-box-shadow);
-    }
-
-    #editor-container.visible {
-      display: block;
-    }
-
-    .editor-title {
-      font-size: 18px;
-      font-weight: 500;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    all-ears-card {
-      display: block;
-      width: 100%;
-    }
-    
-    .state-tag {
-      font-size: 12px;
-      font-weight: 500;
-      background: var(--primary-background-color);
-      padding: 6px 14px;
-      border-radius: 20px;
-      border: 1px solid var(--divider-color);
-      color: var(--secondary-text-color);
-    }
+    body { margin: 0; padding: 16px; background: var(--primary-background-color); color: var(--primary-text-color);
+      font-family: Roboto, system-ui, sans-serif; }
+    .bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-items: start; }
+    ha-card { display: block; background: var(--card-background-color); border-radius: 12px; border: 1px solid var(--divider-color); }
+    ha-icon { display: inline-block; width: var(--mdc-icon-size, 24px); height: var(--mdc-icon-size, 24px);
+      border-radius: 50%; background: currentColor; opacity: .5; }
+    h3 { margin: 0 0 6px; font-size: 13px; font-weight: 500; color: var(--secondary-text-color); }
   </style>
 </head>
-
 <body>
-
-  <aside class="sidebar">
-    <div class="sidebar-header">
-      <ha-icon icon="mdi:camera-iris" style="color: var(--primary-color); --mdc-icon-size: 24px;"></ha-icon>
-      <span>AllEars Preview</span>
-    </div>
-    
-    <div class="nav-group-title">State Scenarios</div>
-    <div class="toolbar-controls">
-      <button class="ctrl-btn active" id="btn-state-clear" onclick="setState('clear')">
-        <ha-icon icon="mdi:check-circle-outline"></ha-icon> Clear
-      </button>
-      <button class="ctrl-btn" id="btn-state-active" onclick="setState('active')">
-        <ha-icon icon="mdi:ear-hearing"></ha-icon> Active
-      </button>
-      <button class="ctrl-btn" id="btn-state-unavail" onclick="setState('unavailable')">
-        <ha-icon icon="mdi:alert-circle-outline"></ha-icon> Unavailable
-      </button>
-    </div>
-
-    <div class="nav-group-title">Tools</div>
-    <div class="toolbar-controls">
-      <button class="ctrl-btn" id="btn-toggle-editor" onclick="toggleEditor()">
-        <ha-icon icon="mdi:cog-outline"></ha-icon> Visual Editor
-      </button>
-    </div>
-  </aside>
-
-  <main class="main-content">
-    <header class="top-header">
-      <div class="header-title">
-        <ha-icon icon="mdi:home-outline"></ha-icon> Home Dashboard
-      </div>
-      <div class="state-tag" id="state-tag">State: Clear</div>
-    </header>
-    
-    <div class="dashboard-area">
-      <!-- Visual Editor Area -->
-      <div id="editor-container">
-        <div class="editor-title">
-          <ha-icon icon="mdi:pencil-outline"></ha-icon> Card Editor (Mock)
-        </div>
-        <div id="editor-mount"></div>
-      </div>
-
-      <!-- Main Card -->
-      <all-ears-card id="card"></all-ears-card>
-    </div>
-  </main>
-
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" />
-  <script>
-    class HaIcon extends HTMLElement {
-      static get observedAttributes() { return ['icon']; }
-      connectedCallback() { this._render(); }
-      attributeChangedCallback() { this._render(); }
-      _render() {
-        const icon = this.getAttribute('icon') || '';
-        const cls = icon.replace(':', '-');
-        this.innerHTML = `<span class="mdi ${cls}" style="font-size:20px; line-height:1; display:inline-flex; align-items:center;"></span>`;
-      }
-    }
-    customElements.define('ha-icon', HaIcon);
-
-    class HaCard extends HTMLElement {
-      connectedCallback() { this.style.display = 'block'; }
-    }
-    customElements.define('ha-card', HaCard);
-  </script>
-
-  <script type="module" src="./custom_components/allears/www/all-ears-card.js"></script>
-
-  <script>
-    const MOCK_STATES = {
-      clear: {
-        'binary_sensor.allears_sound_active': { state: 'off', attributes: {} },
-        'sensor.allears_last_detected_sound': { state: 'dog_bark', attributes: { confidence: 0.87, flow_name: 'Dog Alert Flow', timestamp: new Date().toISOString() } },
-        'sensor.allears_last_triggered_flow': { state: 'Dog Alert Flow', attributes: { sound_class: 'dog_bark', timestamp: new Date().toISOString() } },
+  <div class="bar">
+    <button id="fire">Simulate sound</button>
+    <button id="theme">Toggle dark</button>
+  </div>
+  <div class="grid">
+    <div><h3>Connected</h3><all-ears-card id="c1"></all-ears-card></div>
+    <div><h3>Waiting for the phone</h3><all-ears-card id="c2"></all-ears-card></div>
+    <div><h3>No device</h3><all-ears-card id="c3"></all-ears-card></div>
+  </div>
+  <script type="module">
+    import './custom_components/allears/www/all-ears-card.js';
+    const now = Date.now();
+    const iso = (ms) => new Date(ms).toISOString();
+    const ent = (id, dev, key) => ({ entity_id: id, device_id: dev, platform: 'allears', translation_key: key });
+    const base = {
+      user: { is_admin: true },
+      devices: { d1: { name: 'Bedroom phone' }, d2: { name: 'Kitchen tablet' } },
+      entities: {
+        'sensor.bedroom_phone_last_sound': ent('sensor.bedroom_phone_last_sound', 'd1', 'last_sound'),
+        'binary_sensor.bedroom_phone_sound_active': ent('binary_sensor.bedroom_phone_sound_active', 'd1', 'sound_active'),
+        'sensor.bedroom_phone_last_seen': ent('sensor.bedroom_phone_last_seen', 'd1', 'last_seen'),
+        'select.bedroom_phone_flow_filter': ent('select.bedroom_phone_flow_filter', 'd1', 'active_flow_filter'),
+        'sensor.kitchen_tablet_last_sound': ent('sensor.kitchen_tablet_last_sound', 'd2', 'last_sound'),
+        'binary_sensor.kitchen_tablet_sound_active': ent('binary_sensor.kitchen_tablet_sound_active', 'd2', 'sound_active'),
+        'select.kitchen_tablet_flow_filter': ent('select.kitchen_tablet_flow_filter', 'd2', 'active_flow_filter'),
       },
-      active: {
-        'binary_sensor.allears_sound_active': { state: 'on', attributes: {} },
-        'sensor.allears_last_detected_sound': { state: 'glass_breaking', attributes: { confidence: 0.94, flow_name: 'Security Flow', timestamp: new Date().toISOString() } },
-        'sensor.allears_last_triggered_flow': { state: 'Security Flow', attributes: { sound_class: 'glass_breaking', timestamp: new Date().toISOString() } },
+      states: {
+        'sensor.bedroom_phone_last_sound': { state: 'Baby cry, infant cry', last_updated: iso(now - 120000),
+          attributes: { flow_name: 'Nursery', confidence: 0.91, timestamp: iso(now - 120000) } },
+        'binary_sensor.bedroom_phone_sound_active': { state: 'off', attributes: {} },
+        'sensor.bedroom_phone_last_seen': { state: iso(now - 60000), attributes: {} },
+        'select.bedroom_phone_flow_filter': { state: 'All Flows', attributes: { options: ['All Flows', 'Nursery', 'Security', 'Doorbell'] } },
+        'sensor.kitchen_tablet_last_sound': { state: 'unknown', attributes: {} },
+        'binary_sensor.kitchen_tablet_sound_active': { state: 'off', attributes: {} },
+        'select.kitchen_tablet_flow_filter': { state: 'All Flows', attributes: { options: ['All Flows'] } },
       },
-      unavailable: {
-        'binary_sensor.allears_sound_active': { state: 'unavailable', attributes: {} },
-        'sensor.allears_last_detected_sound': { state: 'unavailable', attributes: {} },
-        'sensor.allears_last_triggered_flow': { state: 'unavailable', attributes: {} },
-      }
+      callService: (d, s, data) => console.log('callService', d, s, data),
+      callWS: async (msg) => ({ [msg.entity_ids[0]]: msg.entity_ids[0].startsWith('sensor.bedroom') ? [
+        { s: 'Glass', a: { flow_name: 'Security', confidence: 0.74, timestamp: iso(now - 3600e3 * 5) }, lu: (now - 3600e3 * 5) / 1000 },
+        { s: 'Doorbell', a: { flow_name: 'Doorbell', confidence: 0.88, timestamp: iso(now - 3600e3 * 2) }, lu: (now - 3600e3 * 2) / 1000 },
+        { s: 'Baby cry, infant cry', a: { flow_name: 'Nursery', confidence: 0.91, timestamp: iso(now - 120000) }, lu: (now - 120000) / 1000 },
+      ] : [] }),
     };
-
-    const MOCK_HASS = (stateKey) => ({
-      states: MOCK_STATES[stateKey],
-      config: { internal_url: 'http://homeassistant.local:8123' },
-      callService: (domain, service, data) => {
-        console.log('[allears] callService:', domain, service, data);
-        alert(`✓ HA Service called: ${domain}.${service}`);
-      },
-    });
-
-    let currentState = 'clear';
-    const card = document.getElementById('card');
-    const tag = document.getElementById('state-tag');
-
-    function setState(s) {
-      currentState = s;
-      tag.textContent = 'State: ' + s.charAt(0).toUpperCase() + s.slice(1);
-      document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('btn-state-' + (s === 'unavailable' ? 'unavail' : s))?.classList.add('active');
-      pushHass(s);
-    }
-
-    function pushHass(s) {
-      customElements.whenDefined('all-ears-card').then(() => {
-        if (!card._config) {
-          card.setConfig({
-            device_name: 'AllEars Sound Tracker',
-            location: 'Living Room',
-            firmware: '1.0.0',
-            notifications: true,
-            soundAlerts: false,
-            logEvents: true
-          });
-        }
-        card.hass = MOCK_HASS(s);
-      });
-    }
-
-    function toggleEditor() {
-      const container = document.getElementById('editor-container');
-      const btn = document.getElementById('btn-toggle-editor');
-      const mount = document.getElementById('editor-mount');
-      
-      const visible = container.classList.toggle('visible');
-      btn.classList.toggle('active', visible);
-
-      if (visible) {
-        mount.innerHTML = '';
-        const editor = document.createElement('all-ears-card-editor');
-        editor.setConfig(card._config);
-        editor.hass = card.hass;
-        mount.appendChild(editor);
-        
-        // Listen for config changes from editor
-        editor.addEventListener('config-changed', (ev) => {
-          console.log('[Preview] Editor changed config:', ev.detail.config);
-          card.setConfig(ev.detail.config);
-          card.hass = card.hass; // force refresh
-        });
-      }
-    }
-
-    // Listen for config changes from the card itself (e.g. toggles in the UI)
-    window.addEventListener('config-changed', (ev) => {
-      if (ev.target.tagName === 'ALL-EARS-CARD') {
-        console.log('[Preview] Card changed config:', ev.detail.config);
-        card.setConfig(ev.detail.config);
-        // Sync editor if open
-        const editor = document.querySelector('all-ears-card-editor');
-        if (editor) editor.setConfig(ev.detail.config);
-      }
-    });
-
-    customElements.whenDefined('all-ears-card').then(() => pushHass('clear'));
+    let hass = base;
+    const c1 = document.getElementById('c1'); c1.setConfig({ device_id: 'd1' }); c1.hass = hass;
+    const c2 = document.getElementById('c2'); c2.setConfig({ device_id: 'd2' }); c2.hass = hass;
+    const c3 = document.getElementById('c3'); c3.setConfig({}); c3.hass = { ...base, entities: {}, states: {} };
+    document.getElementById('fire').onclick = () => {
+      const t = Date.now();
+      hass = { ...hass, states: { ...hass.states,
+        'sensor.bedroom_phone_last_sound': { state: 'Dog', last_updated: iso(t), attributes: { flow_name: 'Security', confidence: 0.83, timestamp: iso(t) } },
+        'binary_sensor.bedroom_phone_sound_active': { state: 'on', attributes: {} },
+        'sensor.bedroom_phone_last_seen': { state: iso(t), attributes: {} } } };
+      c1.hass = hass;
+    };
+    document.getElementById('theme').onclick = () => document.body.classList.toggle('dark');
   </script>
 </body>
 </html>

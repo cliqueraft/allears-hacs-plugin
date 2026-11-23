@@ -1,18 +1,13 @@
+# AllEars card: how it is wired
 
-### Step 1: Register the Dashboard Resource
-Since the integration serves the file for you, you simply have to tell your Home Assistant dashboard where to find it.
-
-*   **In the HA UI:** Go to **Settings** → **Dashboards** → **Resources** (top right menu) → **Add Resource**.
-*   **Enter the URL:** `/all-ears-card/all-ears-card.js`
-*   **Type:** JavaScript Module
-
-### Step 2: Use the Visual Editor
-You no longer have to guess YAML configurations.
-*   Go to any dashboard, click **Edit Dashboard**, then click **Add Card**.
-*   Scroll down or search for **AllEars Sound Tracker**.
-*   A complete visual editor will open, letting you set the Device Name, adjust toggles, and see a live preview.
-
-### Under the Hood
-*   **`__init__.py`:** Automatically maps the `/all-ears-card/` URL path to the integration's internal `www/` directory.
-*   **`static getStubConfig()`:** Allows the Home Assistant visual editor to provide default settings when you click the card in the menu.
-*   **Data Contract:** The JavaScript still directly reads the states of `sensor.allears_last_detected_sound` and `binary_sensor.allears_sound_active`.
+* **Served and loaded automatically.** `__init__.py` serves `www/` at `/all-ears-card/`
+  (`async_register_static_paths`, falling back to `register_static_path` before HA 2024.7)
+  and registers the card with `frontend.add_extra_js_url`, so there is no dashboard resource to add.
+* **No hard-coded entity ids.** The card reads `hass.entities` and `hass.devices`, keeps the
+  entities whose platform is `allears`, groups them by device and matches each by its
+  `translation_key` (`last_sound`, `last_flow`, `sound_active`, `active_flow_filter`, `last_seen`).
+* **History** comes from `history/history_during_period` for the *Last sound* entity (with
+  attributes), so it survives reloads. Live changes are appended as they arrive.
+* **Visual editor**: `all-ears-card-editor` uses `ha-form` with a device selector limited to AllEars.
+* **Escaping**: every value from the phone (sound and flow names) is HTML-escaped before rendering.
+* **Local preview**: run `python -m http.server` in the repo root and open `/preview.html`.

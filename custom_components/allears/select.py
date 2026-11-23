@@ -12,13 +12,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    ATTR_DEVICE_ID,
     ATTR_FLOW_NAME,
     DOMAIN,
     EVENT_FLOW_SELECTED,
     ICON_WAVES,
     SELECT_ALL_FLOWS,
     SELECT_FLOW_FILTER,
-    SELECT_FLOW_FILTER_NAME,
 )
 from .coordinator import AllEarsDataUpdateCoordinator
 from .sensor import _build_device_info
@@ -53,7 +53,7 @@ class AllEarsFlowFilterSelect(
     """
 
     _attr_has_entity_name = True
-    _attr_name = SELECT_FLOW_FILTER_NAME
+    _attr_translation_key = SELECT_FLOW_FILTER
     _attr_icon = ICON_WAVES
     _attr_should_poll = False
 
@@ -120,6 +120,8 @@ class AllEarsFlowFilterSelect(
 
         # Fire event so HA automations can react without needing state sensors.
         event_data: dict[str, Any] = {ATTR_FLOW_NAME: option}
+        if self.coordinator.device_id is not None:
+            event_data[ATTR_DEVICE_ID] = self.coordinator.device_id
         self.hass.bus.async_fire(EVENT_FLOW_SELECTED, event_data)
         _LOGGER.debug("Flow selected: %s — fired: %s", option, EVENT_FLOW_SELECTED)
 
