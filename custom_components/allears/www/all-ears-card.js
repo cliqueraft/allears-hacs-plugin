@@ -10,6 +10,14 @@
 const AE_DOMAIN = 'allears';
 const AE_VERSION = '1.1.0';
 const AE_ALL_FLOWS = 'All Flows';
+// App logo served next to this file (/all-ears-card/logo.png).
+const AE_LOGO_URL = (() => {
+  try {
+    return new URL('./logo.png', import.meta.url).href;
+  } catch (e) {
+    return '/all-ears-card/logo.png';
+  }
+})();
 
 const aeEsc = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -222,7 +230,7 @@ class AllEarsCard extends HTMLElement {
 
   _header(title, mode, status) {
     return `<div class="head">
-      <div class="ear ${mode}"><span class="ring"></span><span class="ring r2"></span><ha-icon icon="${mode === 'off' ? 'mdi:ear-hearing-off' : 'mdi:ear-hearing'}"></ha-icon></div>
+      <div class="ear ${mode}"><span class="ring"></span><span class="ring r2"></span><img class="logo" src="${AE_LOGO_URL}" alt="AllEars"></div>
       <div class="ttl"><div class="name">${aeEsc(title)}</div><div class="status ${mode}">${aeEsc(status)}</div></div>
     </div>`;
   }
@@ -392,7 +400,8 @@ const AE_STYLES = `
     display: grid; place-items: center; background: rgba(var(--rgb-primary-color, 3, 169, 244), .12); color: var(--primary-color); }
   .ear.active { background: rgba(var(--rgb-warning-color, 255, 166, 0), .16); color: var(--warning-color, #ffa600); }
   .ear.off { background: var(--secondary-background-color); color: var(--disabled-text-color, #999); }
-  .ear ha-icon { --mdc-icon-size: 24px; position: relative; }
+  .ear .logo { width: 28px; height: 28px; object-fit: contain; position: relative; }
+  .ear.off .logo { opacity: .5; filter: grayscale(100%); }
   .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid currentColor; opacity: 0; }
   .ear.active .ring { animation: ae-ping 1.6s ease-out infinite; }
   .ear.active .r2 { animation-delay: .8s; }
