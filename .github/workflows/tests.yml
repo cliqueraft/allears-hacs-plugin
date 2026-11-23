@@ -20,12 +20,15 @@ jobs:
           - python-version: "3.12"
             ha-version: "2024.6.0"
             phcc-version: "==0.13.205"
-          # Current Home Assistant: catches removed core APIs early.
+          # Recent Home Assistant: catches removed core APIs early. Installed
+          # with HA's own package constraints so transitive deps (aiodns,
+          # pycares, ...) match what HA ships. Bump both lines together.
           - python-version: "3.13"
-            ha-version: "latest"
-            phcc-version: ""
-            # aiodns 4.0 (pinned by HA) needs the pycares 5 API; newer pycares breaks it.
-            extra-deps: "pycares>=5,<6"
+            ha-version: "2026.2.3"
+            phcc-version: "==0.13.316"
+            constraints: "https://raw.githubusercontent.com/home-assistant/core/2026.2.3/homeassistant/package_constraints.txt"
+            # aiodns 4.0.0 breaks with pycares 5.1+ (Oct 2026); HA shipped on 5.0.x.
+            extra-deps: "pycares==5.0.1"
 
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +52,8 @@ jobs:
             "pytest-homeassistant-custom-component${{ matrix.phcc-version }}" \
             pytest-cov \
             freezegun \
-            ${{ matrix.extra-deps && format('"{0}"', matrix.extra-deps) || '' }}
+            ${{ matrix.extra-deps && format('"{0}"', matrix.extra-deps) || '' }} \
+            ${{ matrix.constraints && format('-c "{0}"', matrix.constraints) || '' }}
 
       - name: Run tests
         run: |
