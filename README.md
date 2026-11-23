@@ -10,7 +10,7 @@ Subtitle: Home Assistant integration for the AllEars Android app
 This integration receives classified sound events directly from the AllEars Android app via a local webhook. It creates sensors to track the latest detected sounds and flows within Home Assistant. You can use these entities to build powerful automations or trigger immediate alerts.
 
 ## Prerequisites
-1. Home Assistant `2024.1.0` or later (CI tests 2024.1, 2024.6 and the current release)
+1. Home Assistant `2024.1.0` or later (CI tests 2024.1, 2024.6 and 2026.2)
 2. AllEars app installed on Android (https://play.google.com/store/apps/details?id=com.cliqueraft.allears&hl=en_IN)
 3. HA reachable from the Android device (local network or Nabu Casa)
 
