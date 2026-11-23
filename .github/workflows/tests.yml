@@ -49,7 +49,7 @@ jobs:
             "pytest-homeassistant-custom-component${{ matrix.phcc-version }}" \
             pytest-cov \
             freezegun \
-            ${{ matrix.extra-deps }}
+            ${{ matrix.extra-deps && format('"{0}"', matrix.extra-deps) || '' }}
 
       - name: Run tests
         run: |
