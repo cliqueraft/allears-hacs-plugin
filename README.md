@@ -1,10 +1,10 @@
 # AllEars Sound Tracker
 Subtitle: Home Assistant integration for the AllEars Android app
 
-[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/cliqueraft/allears-hacs-plugin)
-[![Validate](https://github.com/cliqueraft/allears-hacs-plugin/actions/workflows/validate.yml/badge.svg)](https://github.com/cliqueraft/allears-hacs-plugin/actions/workflows/validate.yml)
-[![Tests](https://github.com/cliqueraft/allears-hacs-plugin/actions/workflows/tests.yml/badge.svg)](https://github.com/cliqueraft/allears-hacs-plugin/actions/workflows/tests.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/cliqueraft/allears-hacs-plugin/blob/main/LICENSE)
+[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/cliqueraft/allears-home-assistant)
+[![Validate](https://github.com/cliqueraft/allears-home-assistant/actions/workflows/validate.yml/badge.svg)](https://github.com/cliqueraft/allears-home-assistant/actions/workflows/validate.yml)
+[![Tests](https://github.com/cliqueraft/allears-home-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/cliqueraft/allears-home-assistant/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/cliqueraft/allears-home-assistant/blob/main/LICENSE)
 
 ## Overview
 This integration receives classified sound events directly from the AllEars Android app via a local webhook. It creates sensors to track the latest detected sounds and flows within Home Assistant. You can use these entities to build powerful automations or trigger immediate alerts.
@@ -20,7 +20,7 @@ This integration receives classified sound events directly from the AllEars Andr
 1. Open HACS in Home Assistant
 2. Go to Integrations
 3. Click the three-dot menu → Custom repositories
-4. Add: `https://github.com/cliqueraft/allears-hacs-plugin` — category: Integration
+4. Add: `https://github.com/cliqueraft/allears-home-assistant` — category: Integration
 5. Search for "AllEars Sound Tracker" → Download
 
 Once AllEars is listed in the HACS default store, skip steps 3 and 4: just search for "AllEars Sound Tracker" in HACS.
@@ -157,8 +157,8 @@ Requirements for all PRs:
 
 Local dev setup:
 ```bash
-git clone https://github.com/cliqueraft/allears-hacs-plugin
-cd allears-hacs-plugin
+git clone https://github.com/cliqueraft/allears-home-assistant
+cd allears-home-assistant
 pip install ruff mypy pytest pytest-asyncio \
   pytest-homeassistant-custom-component pytest-cov freezegun
 pytest tests/ --cov=custom_components/allears

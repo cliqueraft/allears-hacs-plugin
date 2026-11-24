@@ -463,7 +463,7 @@ if (!window.customCards.find((c) => c.type === 'all-ears-card')) {
     name: 'AllEars',
     preview: true,
     description: 'Live sound status, last sound, flows and recent history from an AllEars phone.',
-    documentationURL: 'https://github.com/cliqueraft/allears-hacs-plugin',
+    documentationURL: 'https://github.com/cliqueraft/allears-home-assistant',
   });
 }
 console.info(`%c ALLEARS-CARD %c ${AE_VERSION} `, 'background:#03a9f4;color:#fff;border-radius:3px 0 0 3px', 'background:#444;color:#fff;border-radius:0 3px 3px 0');
