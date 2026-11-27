@@ -76,5 +76,5 @@ The April "v1.1.0" GitHub release shipped the 1.0.0 code, so these changes are r
 - Webhook_id immutable after creation — cannot be changed via
   OptionsFlow
 
-[Unreleased]: https://github.com/cliqueraft/allears-hacs-plugin/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/cliqueraft/allears-hacs-plugin/releases/tag/v1.0.0
+[Unreleased]: https://github.com/cliqueraft/allears-home-assistant/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/cliqueraft/allears-home-assistant/releases/tag/v1.0.0

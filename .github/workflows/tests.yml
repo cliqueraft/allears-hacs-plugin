@@ -43,7 +43,10 @@ jobs:
       # Older pytest-homeassistant-custom-component sets the "US/Pacific" time
       # zone; newer Ubuntu runners ship those legacy names in tzdata-legacy.
       - name: Install legacy time zone names
-        run: sudo apt-get install -y -q tzdata-legacy || true
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q tzdata-legacy
+          test -e /usr/share/zoneinfo/US/Pacific
 
       - name: Install dependencies
         run: |
