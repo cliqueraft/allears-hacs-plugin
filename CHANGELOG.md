@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-27
+
+### Fixed
+- Brand images (`brand/icon.png`, `brand/logo.png`) were JPEG files with a
+  `.png` name. They are now real PNGs at Home Assistant's sizes (256x256,
+  plus `@2x` at 512x512), so the integration icon shows correctly.
+
+### Changed
+- The repository is now `cliqueraft/allears-home-assistant` (was
+  `allears-hacs-plugin`). Old links redirect.
+
 ## [1.2.0] - 2026-11-24
 
 The April "v1.1.0" GitHub release shipped the 1.0.0 code, so these changes are released as 1.2.0.
